@@ -1,0 +1,22 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Build output
+bin/
+obj/
+dist/
+out/
+
+# Dependencies
+node_modules/
+
+# Environment
+.env
+*.env.local

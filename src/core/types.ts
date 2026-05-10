@@ -1,3 +1,6 @@
+export type UnitId = string;
+export type TeamId = string;
+
 export interface Point {
   readonly x: number;
   readonly y: number;

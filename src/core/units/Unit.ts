@@ -1,9 +1,10 @@
 import { modifierEffects, unitTypeStats } from "../config.js";
-import type { Modifier, Point, UnitType } from "../types.js";
+import type { Modifier, Point, TeamId, UnitId, UnitType } from "../types.js";
 
 export interface UnitInit {
-  id: string;
+  id: UnitId;
   name: string;
+  teamId: TeamId;
   position: Point;
   modifiers?: Iterable<Modifier>;
 }
@@ -11,7 +12,8 @@ export interface UnitInit {
 export abstract class Unit {
   abstract readonly type: UnitType;
 
-  readonly id: string;
+  readonly id: UnitId;
+  readonly teamId: TeamId;
   name: string;
   readonly modifiers: ReadonlySet<Modifier>;
 
@@ -19,6 +21,7 @@ export abstract class Unit {
 
   constructor(init: UnitInit) {
     this.id = init.id;
+    this.teamId = init.teamId;
     this.name = init.name;
     this._position = init.position;
     this.modifiers = new Set(init.modifiers ?? []);

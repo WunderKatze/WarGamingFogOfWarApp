@@ -10,17 +10,18 @@ import { TerrainPolygon } from "../../src/core/map/TerrainPolygon.js";
 import { TerrainWall } from "../../src/core/map/TerrainWall.js";
 import { Infantry } from "../../src/core/units/Infantry.js";
 import { Tank } from "../../src/core/units/Tank.js";
-import type { Point } from "../../src/core/types.js";
+import type { Point, TeamId, UnitId } from "../../src/core/types.js";
 import { VisionCalculator } from "../../src/core/VisionCalculator.js";
+import { createEmptyVisionState, type VisionState } from "../../src/core/VisionState.js";
 
 const p = (x: number, y: number): Point => ({ x, y });
 
-const tankAt = (id: string, pos: Point) =>
-  new Tank({ id, name: id, position: pos });
-const reconTankAt = (id: string, pos: Point) =>
-  new Tank({ id, name: id, position: pos, modifiers: ["Recon"] });
-const infantryAt = (id: string, pos: Point, dugIn = false) =>
-  new Infantry({ id, name: id, position: pos, dugIn });
+const tankAt = (id: string, pos: Point, teamId = "A") =>
+  new Tank({ id, name: id, teamId, position: pos });
+const reconTankAt = (id: string, pos: Point, teamId = "A") =>
+  new Tank({ id, name: id, teamId, position: pos, modifiers: ["Recon"] });
+const infantryAt = (id: string, pos: Point, dugIn = false, teamId = "A") =>
+  new Infantry({ id, name: id, teamId, position: pos, dugIn });
 
 const square = (id: string, x: number, y: number, w: number, h: number, terrainType: "Building" | "TallWoods" | "ShortTerrain") =>
   new TerrainPolygon({
@@ -168,5 +169,189 @@ describe("VisionCalculator.discover", () => {
     const farTarget = tankAt("ft", p(reducedRange + 0.01, 50));
     expect(building.containsPoint(farTarget.getPosition())).toBe(true);
     expect(vc.discover(observer, farTarget)).toBe(false);
+  });
+});
+
+// --- runVisionPhase ---
+
+const sortedArr = (s: ReadonlySet<UnitId>): UnitId[] => [...s].sort();
+
+const expectIndividual = (state: VisionState, observerId: UnitId, expected: UnitId[]) => {
+  const list = state.individualLists.get(observerId) ?? new Set<UnitId>();
+  expect(sortedArr(list)).toEqual([...expected].sort());
+};
+
+const expectTeam = (state: VisionState, teamId: TeamId, expected: UnitId[]) => {
+  const list = state.teamLists.get(teamId) ?? new Set<UnitId>();
+  expect(sortedArr(list)).toEqual([...expected].sort());
+};
+
+const expectRevealed = (state: VisionState, expected: UnitId[]) => {
+  expect(sortedArr(state.revealed)).toEqual([...expected].sort());
+};
+
+describe("VisionCalculator.runVisionPhase — first turn (empty state)", () => {
+  it("two close enemy tanks mutually discover and both become Revealed", () => {
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
+    const a = tankAt("A1", p(0, 0), "A");
+    const b = tankAt("B1", p(40, 0), "B");
+    const state = createEmptyVisionState();
+
+    vc.runVisionPhase(state, [a, b], new Set());
+
+    expectIndividual(state, "A1", ["B1"]);
+    expectIndividual(state, "B1", ["A1"]);
+    expectTeam(state, "A", ["B1"]);
+    expectTeam(state, "B", ["A1"]);
+    expectRevealed(state, ["A1", "B1"]);
+  });
+
+  it("asymmetric vision: a recon tank detects a regular tank but is not detected back", () => {
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
+    // Recon tank's vision range = 64; recon tank's intrinsic stealth = 4/3, so
+    // a regular tank's range against it = 48 / (4/3) = 36. Place them at distance 50:
+    // recon detects (50 ≤ 64), regular tank cannot (50 > 36).
+    const a = reconTankAt("A1", p(0, 0), "A");
+    const b = tankAt("B1", p(50, 0), "B");
+    const state = createEmptyVisionState();
+
+    vc.runVisionPhase(state, [a, b], new Set());
+
+    expectIndividual(state, "A1", ["B1"]);
+    expectIndividual(state, "B1", []);
+    expectRevealed(state, []);
+  });
+});
+
+describe("VisionCalculator.runVisionPhase — step 5 See branch (team list dispenses with Discover)", () => {
+  it("a teammate too far to Discover can still See an already-detected enemy", () => {
+    // A1 is close enough to Discover B1. A2 is far beyond Discover range,
+    // but has clear line of sight. Once B1 enters Team A's team list (via A1),
+    // A2 should add B1 to its own individual list via See alone.
+    const vc = new VisionCalculator(new GameMap({ width: 5000, height: 100 }));
+    const a1 = tankAt("A1", p(0, 0), "A");
+    const a2 = tankAt("A2", p(2000, 0), "A");
+    const b1 = tankAt("B1", p(40, 0), "B");
+    const state = createEmptyVisionState();
+
+    vc.runVisionPhase(state, [a1, a2, b1], new Set());
+
+    expectIndividual(state, "A1", ["B1"]);
+    expectIndividual(state, "A2", ["B1"]); // via See, despite being far past discover range
+    expectTeam(state, "A", ["B1"]);
+  });
+});
+
+describe("VisionCalculator.runVisionPhase — step 2 lost-sight removal", () => {
+  it("an enemy that becomes blocked by terrain is removed from the individual list", () => {
+    const wall = new TerrainWall({ id: "w", from: p(20, -10), to: p(20, 10), wallType: "Tall" });
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100, walls: [wall] }));
+    const a = tankAt("A1", p(0, 0), "A");
+    const b = tankAt("B1", p(40, 0), "B");
+    // Pre-existing carry-over state: A1 had detected B1 last turn (before the wall existed)
+    const state = createEmptyVisionState();
+    state.individualLists.set("A1", new Set(["B1"]));
+    state.individualLists.set("B1", new Set(["A1"]));
+
+    vc.runVisionPhase(state, [a, b], new Set());
+
+    expectIndividual(state, "A1", []);
+    expectIndividual(state, "B1", []);
+  });
+});
+
+describe("VisionCalculator.runVisionPhase — step 4 unreveal", () => {
+  it("a Revealed unit no enemy can See becomes unrevealed", () => {
+    const wall = new TerrainWall({ id: "w", from: p(20, -10), to: p(20, 10), wallType: "Tall" });
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100, walls: [wall] }));
+    const a = tankAt("A1", p(0, 0), "A");
+    const b = tankAt("B1", p(40, 0), "B");
+    // B1 was Revealed last turn, but can no longer be Seen by any enemy (wall in the way)
+    const state = createEmptyVisionState();
+    state.revealed.add("B1");
+
+    vc.runVisionPhase(state, [a, b], new Set());
+
+    expect(state.revealed.has("B1")).toBe(false);
+  });
+
+  it("a Revealed unit at least one enemy can See remains Revealed", () => {
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
+    const a = tankAt("A1", p(0, 0), "A");
+    const b = tankAt("B1", p(40, 0), "B");
+    const state = createEmptyVisionState();
+    state.revealed.add("B1");
+
+    vc.runVisionPhase(state, [a, b], new Set());
+
+    expect(state.revealed.has("B1")).toBe(true);
+  });
+});
+
+describe("VisionCalculator.runVisionPhase — step 7 fire actions", () => {
+  it("a unit that fired this turn becomes Revealed even if no enemy can See it", () => {
+    const wall = new TerrainWall({ id: "w", from: p(20, -10), to: p(20, 10), wallType: "Tall" });
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100, walls: [wall] }));
+    const a = tankAt("A1", p(0, 0), "A");
+    const b = tankAt("B1", p(40, 0), "B");
+    const state = createEmptyVisionState();
+
+    vc.runVisionPhase(state, [a, b], new Set(["A1"]));
+
+    expect(state.revealed.has("A1")).toBe(true);
+    // B1 not revealed — neither side can see the other, no mutual, no fire by B1
+    expect(state.revealed.has("B1")).toBe(false);
+  });
+
+  it("ignores fired ids that don't correspond to any current unit", () => {
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
+    const a = tankAt("A1", p(0, 0), "A");
+    const state = createEmptyVisionState();
+
+    vc.runVisionPhase(state, [a], new Set(["ghost-id"]));
+
+    expectRevealed(state, []);
+  });
+});
+
+describe("VisionCalculator.runVisionPhase — step 9 cascade (fire → See addition → mutual reveal)", () => {
+  it("a fired recon tank becomes Revealed, which lets the enemy add it via See, triggering mutual reveal of the enemy too", () => {
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 1000 }));
+    // Setup: recon A1 can Discover B1 (one-way detection). Distance 50:
+    //   A1 → B1: 50 ≤ 64 ✓
+    //   B1 → A1: 50 ≤ 36 ✗
+    // Then A1 fires. Expected cascade:
+    //   1. fire reveals A1
+    //   2. team B's team list expands with A1
+    //   3. step 5 sees that A1 is on B1's team list → uses See instead of Discover → adds A1
+    //   4. step 8 sees mutual (A1↔B1 in each other's individual lists) → both revealed
+    const a = reconTankAt("A1", p(0, 0), "A");
+    const b = tankAt("B1", p(50, 0), "B");
+    const state = createEmptyVisionState();
+
+    vc.runVisionPhase(state, [a, b], new Set(["A1"]));
+
+    expectIndividual(state, "A1", ["B1"]);
+    expectIndividual(state, "B1", ["A1"]);
+    expectRevealed(state, ["A1", "B1"]);
+  });
+});
+
+describe("VisionCalculator.runVisionPhase — carry-over", () => {
+  it("preserves stable detections and reveals across consecutive vision phases", () => {
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
+    const a = tankAt("A1", p(0, 0), "A");
+    const b = tankAt("B1", p(40, 0), "B");
+    const state = createEmptyVisionState();
+
+    vc.runVisionPhase(state, [a, b], new Set());
+    const firstIndividualA = new Set(state.individualLists.get("A1"));
+    const firstRevealed = new Set(state.revealed);
+
+    // Run again with no changes — state should remain stable
+    vc.runVisionPhase(state, [a, b], new Set());
+
+    expect(state.individualLists.get("A1")).toEqual(firstIndividualA);
+    expect(state.revealed).toEqual(firstRevealed);
   });
 });

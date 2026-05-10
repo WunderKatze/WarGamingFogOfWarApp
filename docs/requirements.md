@@ -106,6 +106,7 @@ A unit's position is a single (x, y) point representing its center. The physical
 
 - **Name** — player-assigned at unit creation (e.g. "1st Platoon", "76mm M4 tank")
 - **Type** — Infantry or Tank
+- **Size** — NATO echelon of the unit, set at creation. Defaults to **platoon**. v1 supported sizes: **squad**, **platoon**, **company**, **battalion**. Reflected in the NATO symbol's echelon amplifier (SIDC positions 11–12). Has no effect on game mechanics in v1; purely visual.
 - **Modifiers** — a list of modifiers applied at unit creation (currently: **Recon**)
 - **Dug In** — Infantry only; toggleable state
   - Defaults to `true` for infantry created during deployment
@@ -231,7 +232,7 @@ Steps 5–9 form a monotonic loop (only adds, never removes), which guarantees t
 ### 3.4 Turn Structure
 
 #### Deployment Phase (game start)
-1. Player 1 deploys all their units (name, type, modifiers, position; infantry default dug-in)
+1. Player 1 deploys all their units (name, type, size, modifiers, position; size defaults to platoon; infantry default dug-in)
 2. Transition screen
 3. Player 2 deploys all their units
 4. Transition screen
@@ -246,7 +247,7 @@ Player 1 takes the first movement turn after deployment; players then alternate.
 2. **Vision phase (pre-move)** — app runs the vision phase algorithm (see Section 3.3) so the active player has up-to-date detection info before making movement decisions. This call also handles unreveal of any unit (either side) that no longer has an enemy who can `See` it.
 3. **Move phase** — active player sees their own units and all enemy units on their team detection list. During this phase the player may:
    - Move units freely (trust-based, no move limits enforced by the app)
-   - Create new units to represent reserves entering from the board edge or infantry disembarking from transports (same name/type/modifier inputs as deployment)
+   - Create new units to represent reserves entering from the board edge or infantry disembarking from transports (same name/type/size/modifier inputs as deployment)
    - Delete their own units to remove those destroyed in combat (each player deletes their own destroyed units on their next turn)
    - Toggle dug-in state on their infantry units
 4. **End Move** — player signals movement is complete
@@ -273,13 +274,15 @@ The app does not track victory conditions or combat outcomes.
 
 ### 4.2 Unit Visuals
 
-Units are displayed using **NATO military symbols** (chosen by unit type) with a **player-set name tag** below.
+Units are displayed using **NATO APP-6 / MIL-STD-2525 military symbols** rendered via the [`milsymbol`](https://github.com/spatialillusions/milsymbol) library, with a **player-set name tag** below the symbol.
 
-Color is relative to the active player:
-- **Black** = friendly (active player's units)
-- **Red** = enemy
+Both the symbol's **frame shape** and **fill color** encode affiliation per NATO standard:
+- **Friendly** — rectangle frame, light-blue fill
+- **Hostile** — diamond frame, red fill
 
-The same physical unit will appear black to its owner and red to the opponent.
+Affiliation is computed relative to the **active player's perspective**: the active player's own units render as Friendly; every other-team unit renders as Hostile. The same physical unit therefore appears as a friendly rectangle to its owner and a hostile diamond to the opponent.
+
+The internal symbol icon (infantry `X`, armor oval, etc.) is determined by unit type per the NATO spec. Modifiers like Recon may be reflected in the symbol's amplifier fields where the spec supports it.
 
 ---
 

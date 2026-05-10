@@ -177,7 +177,7 @@ A Revealed unit becomes **unrevealed** when no enemy unit can `See` it (a purely
 
 #### Vision Phase Algorithm
 
-Runs at the end of each player's move phase (and after fire declaration). Updates all detection lists and the Revealed set. Iterates to a fixed point.
+Called at multiple points in a turn (see Section 3.4 — pre-move, pre-fire, and as the cascade triggered by fire declaration). Updates all detection lists and the Revealed set. Iterates to a fixed point. Steps 7–9 (fire-action handling) are only meaningful when invoked after fire declaration; on pre-move and pre-fire calls there are no pending fire actions and those steps are no-ops.
 
 ```
 1. Carry over previous-turn state
@@ -243,15 +243,16 @@ Deployment zones are managed by the players IRL; the app allows placement anywhe
 Player 1 takes the first movement turn after deployment; players then alternate.
 
 1. **Transition screen** — neutral screen; active player taps "Start Turn"
-2. **Move phase** — active player sees their own units and all enemy units on their team detection list. During this phase the player may:
+2. **Vision phase (pre-move)** — app runs the vision phase algorithm (see Section 3.3) so the active player has up-to-date detection info before making movement decisions. This call also handles unreveal of any unit (either side) that no longer has an enemy who can `See` it.
+3. **Move phase** — active player sees their own units and all enemy units on their team detection list. During this phase the player may:
    - Move units freely (trust-based, no move limits enforced by the app)
    - Create new units to represent reserves entering from the board edge or infantry disembarking from transports (same name/type/modifier inputs as deployment)
    - Delete their own units to remove those destroyed in combat (each player deletes their own destroyed units on their next turn)
    - Toggle dug-in state on their infantry units
-3. **End Move** — player signals movement is complete
-4. **Fire declaration** — active player designates which of their units fired this turn; firing units are flagged for revelation
-5. **Vision phase** — app runs the vision phase algorithm (see Section 3.3) to update detection lists and the Revealed set
-6. **End Turn** — transition screen shown; other player taps "Start Turn"
+4. **End Move** — player signals movement is complete
+5. **Vision phase (pre-fire)** — algorithm runs again so the active player has post-movement detection info before deciding which units fire
+6. **Fire declaration** — active player designates which of their units fired this turn; firing units become Revealed and the vision algorithm's reveal-cascade (steps 7–9) propagates any resulting mutual detections
+7. **End Turn** — transition screen shown; other player taps "Start Turn"
 
 The app does not track victory conditions or combat outcomes.
 
@@ -324,7 +325,7 @@ Features expected in a future version. **The v1 architecture must avoid one-way 
 | Team detection list | Per-team set of all enemies any team unit has detected, plus all currently Revealed enemy units |
 | Revealed | An enemy unit whose position is publicly known and must be represented on the physical table |
 | Mutual detection | A unit X and an enemy Y are each on the other's individual detection list — causes both to become Revealed |
-| Vision phase | The end-of-move algorithm that updates detection lists and the Revealed set (see Section 3.3) |
+| Vision phase | The algorithm that updates detection lists and the Revealed set; called at several points each turn (see Sections 3.3 and 3.4) |
 | Dug In | Infantry state providing a 2x stealth modifier; persists until explicitly cleared |
 | Recon | Unit modifier multiplying vision and stealth by 4/3 |
 | Blocking terrain | Terrain that fully interrupts a ray (tall wall, building with two wall intersections, tall woods beyond 4") |

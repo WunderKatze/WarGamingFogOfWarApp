@@ -1,7 +1,7 @@
 # Requirements — WarGaming Fog of War App
 
 **Status:** Draft  
-**Last Updated:** 2026-05-09  
+**Last Updated:** 2026-05-10  
 **Author:** Ryan
 
 ---
@@ -37,8 +37,8 @@ All core game mechanics are implemented as object-oriented TypeScript classes, i
 | `TerrainPolygon` | Area terrain geometry and type |
 | `TerrainWall` | Wall line segment and type (short/tall) |
 | `GameMap` | Map dimensions, terrain collection, optional backdrop photo + scale; exposes ray intersection methods |
-| `VisionCalculator` | Given a map and unit collections, returns the detection graph and resolves spotted status |
-| `GameState` | Map, players, units, turn state, spotted set — serializes to JSON |
+| `VisionCalculator` | Given a map and unit collections, runs the vision phase: updates per-unit detection lists, team detection lists, and the Revealed set |
+| `GameState` | Map, players, units, turn state, detection lists, Revealed set — serializes to JSON |
 | `Game` | Orchestrates turn flow and applies rules |
 
 The React + Konva UI layer reads from and writes to these classes. It contains no game logic.
@@ -131,41 +131,99 @@ Stat values are stored in configuration, not hardcoded.
 
 ### 3.3 Fog of War
 
-The system distinguishes between **detection** (private knowledge in a player's app view) and **spotted status** (public — the unit must be placed on the physical table).
+The system uses two distinct geometric vision algorithms (`See` and `Discover`), tracks two layers of detection state (individual unit and team-wide), and exposes one piece of public state (`Revealed`) that controls which units are placed on the physical table.
 
-#### Spot Distance Formula
+#### Vision Algorithms
+
+**`See(A, B)`** — geometric line-of-sight check. True if a ray from A's position to B's position is not interrupted by any sight-blocking rule:
+- Ray passes over a tall wall
+- Ray passes through two edges of a single building
+- Ray travels more than 4" through a tall woods polygon
+
+`See` does not consider distance or stealth — only blocking terrain.
+
+**`Discover(A, B)`** — distance- and stealth-aware detection. True if:
+- `See(A, B)` is true, AND
+- `distance(A, B) <= A.vision / B.effective_stealth`
+
+`B.effective_stealth` = B's base stealth multiplied by the highest single applicable modifier (the highest of: any concealing terrain along the ray, or B's dug-in state if applicable).
+
+#### Detection Lists
+
+Two layers of detection state are maintained per team:
+
+- **Individual unit detection list** — the set of enemy units that this specific friendly unit has detected
+- **Team detection list** — the union of all friendly units' individual detection lists, plus all enemy units that are currently `Revealed`
+
+A unit's individual list and the team list use **different rules** for adding entries:
+
+| Condition | Required to add E to F's individual list |
+|---|---|
+| E is **not** on F's team list | `Discover(F, E)` |
+| E **is** on F's team list | `See(F, E)` |
+
+This asymmetry models the war-gaming intuition that once your team has located an enemy, any of your units with line of sight can keep eyes on it — but the initial detection requires the unit's own vision/stealth check.
+
+A unit is **removed** from F's individual list when `See(F, E)` becomes false (regardless of how it was added).
+
+#### Revealed Status (public)
+
+A unit is **Revealed** (placed on the physical table) when either:
+
+1. **Mutual detection** — there exists an enemy unit Y such that the unit is in Y's individual detection list AND Y is in this unit's individual detection list
+2. **Action** — the unit performed a revealing action this turn (firing in v1; possibly more in the future)
+
+A Revealed unit becomes **unrevealed** when no enemy unit can `See` it (a purely geometric check, independent of distance, stealth, or detection lists). This naturally handles "moves behind a wall, building, or deep into woods."
+
+#### Vision Phase Algorithm
+
+Runs at the end of each player's move phase (and after fire declaration). Updates all detection lists and the Revealed set. Iterates to a fixed point.
 
 ```
-spot_distance = spotter_vision / target_effective_stealth
+1. Carry over previous-turn state
+   (individual lists, team lists, Revealed set)
+
+2. Remove lost-sight entries
+   For each friendly F and each enemy E in F's individual list:
+     remove E if !See(F, E)
+
+3. Recompute team lists
+   team_list(team) = union of individual lists for that team's units
+                     + all currently Revealed enemy units
+
+4. Apply unreveal
+   For each X in Revealed set:
+     if no enemy Y has See(Y, X), remove X from Revealed
+     (recompute team lists)
+
+5. Add new entries to individual lists
+   For each friendly F and each enemy E not in F's individual list:
+     if E is on F's team list:    add E iff See(F, E)
+     if E is not on F's team list: add E iff Discover(F, E)
+   Adding may expand the team list.
+
+6. Iterate step 5 until no changes
+   (newly added team-list entries may unlock See-based additions)
+
+7. Apply fire actions
+   Units that fired this turn → Revealed
+
+8. Apply mutual detection
+   For each pair (X, Y) with X in Y's list AND Y in X's list:
+     both → Revealed
+
+9. If steps 7 or 8 changed the Revealed set, jump back to step 5
+   (newly Revealed units expand team lists → may allow new detections → may cause new mutual detections)
 ```
 
-`target_effective_stealth` = target's base stealth multiplied by the highest single modifier from terrain along the ray or the target's dug-in state (if applicable).
-
-#### Detection (private)
-
-A unit **detects** an enemy when:
-- The enemy is within the unit's spot distance, AND
-- No fully blocking terrain interrupts the ray between them
-
-Detection is private: the active player's app shows them all enemies their units detect, even if those enemies are not spotted. This enables ambush — a hidden unit can know an enemy is approaching without revealing itself.
-
-#### Spotted Status (public)
-
-A unit becomes **spotted** (must be placed on the physical table) when any of the following occur during end-of-move recalculation:
-
-1. **Detected by a spotted friendly** — propagates transitively (a unit that becomes spotted via this rule then itself becomes a spotter for further propagation)
-2. **Mutual detection** — if an unspotted friendly and an unspotted enemy detect each other, both become spotted
-3. **Firing** — declared by the active player at the fire-declaration step; firing units immediately become spotted regardless of the vision formula
-
-#### Unspotting
-
-A spotted unit remains spotted until it moves behind fully blocking terrain. Moving out of detection range alone is not enough to become unspotted.
+Steps 5–9 form a monotonic loop (only adds, never removes), which guarantees termination.
 
 #### Player-Facing Behavior
 
-- The active player's map view shows their own units, all enemies their units detect, and a clear visual distinction between detected-only and spotted enemies.
-- After vision recalculation the app displays **"Place on table"** for each newly spotted enemy unit and **"Remove from table"** for each previously spotted enemy unit now obscured by blocking terrain.
-- Detected-only enemies are never instructed to be placed on the table (that would reveal the position of the detecting unit).
+- The active player's map view shows their own units and every enemy unit on their team detection list.
+- A clear visual distinction is shown between **Revealed** enemies (on the table) and **detected-only** enemies (private knowledge).
+- After the vision phase, both players are notified: **"Place on table"** for each newly Revealed enemy, **"Remove from table"** for each enemy that became unrevealed.
+- Detected-only enemies are never instructed to be placed on the table — doing so would reveal the position of the detecting unit.
 - The transition screen between turns prevents the incoming player from seeing the outgoing player's map view.
 
 ---
@@ -185,13 +243,14 @@ Deployment zones are managed by the players IRL; the app allows placement anywhe
 Player 1 takes the first movement turn after deployment; players then alternate.
 
 1. **Transition screen** — neutral screen; active player taps "Start Turn"
-2. **Move phase** — active player sees their own units and all detected enemy units. During this phase the player may:
+2. **Move phase** — active player sees their own units and all enemy units on their team detection list. During this phase the player may:
    - Move units freely (trust-based, no move limits enforced by the app)
    - Create new units to represent reserves entering from the board edge or infantry disembarking from transports (same name/type/modifier inputs as deployment)
    - Delete their own units to remove those destroyed in combat (each player deletes their own destroyed units on their next turn)
+   - Toggle dug-in state on their infantry units
 3. **End Move** — player signals movement is complete
-4. **Vision calculation** — app recalculates detection and spotted status for all units based on final positions
-5. **Fire declaration** — active player designates which of their units fired this turn; firing units are immediately marked as spotted
+4. **Fire declaration** — active player designates which of their units fired this turn; firing units are flagged for revelation
+5. **Vision phase** — app runs the vision phase algorithm (see Section 3.3) to update detection lists and the Revealed set
 6. **End Turn** — transition screen shown; other player taps "Start Turn"
 
 The app does not track victory conditions or combat outcomes.
@@ -208,8 +267,8 @@ The app does not track victory conditions or combat outcomes.
 | Map setup | Photo import + calibration, or drawing tool for terrain; save/load map files |
 | Deployment | Each player places and names their units |
 | Transition | Neutral screen between turns; shows whose turn is next; single "Start Turn" button |
-| Game board | Map with active player's units, detected enemy units, and spotted status indicators; move controls; end move / fire declaration / end turn flow |
-| Spot/unspot notification | Overlay listing units to place or remove from the table |
+| Game board | Map with active player's units, all detected enemies (with Revealed vs detected-only visual distinction), move controls, dug-in toggle, end move / fire declaration / end turn flow |
+| Reveal notification | Overlay listing units to place on or remove from the table after the vision phase |
 
 ### 4.2 Unit Visuals
 
@@ -240,10 +299,10 @@ Features expected in a future version. **The v1 architecture must avoid one-way 
 | **Polygon map shapes** (currently rectangles only) | `GameMap` should treat the playable area as a shape, not assume rectangular bounds in geometry checks. The coordinate system already specifies bounding-rect-derived coordinates so polygon maps slot in cleanly. |
 | **Elevation / height-based vision** | Unit and terrain positions should be modeled so an elevation field can be added without restructuring. `VisionCalculator` should accept the map as input rather than hardcoding flat-plane assumptions. |
 | **Unit footprints (e.g. 9-point square arrays instead of single points)** | Don't hardcode `unit.x, unit.y` access throughout the codebase — wrap unit position access so the underlying representation can change to a shape later. |
-| **Glimpse mechanic (mid-move spotting)** | Vision recalculation must be a callable method on `VisionCalculator` / `Game`, not hardcoded to fire only at end-of-turn. The turn flow can call it at one point in v1 without preventing additional call sites later. |
+| **Glimpse mechanic (mid-move detection)** | Vision phase must be a callable method on `VisionCalculator` / `Game`, not hardcoded to fire only at end-of-turn. The turn flow can call it at one point in v1 without preventing additional call sites later. |
 | **More than 2 players** | `GameState` should hold a list/collection of players, not two named fields like `player1` / `player2`. Turn order should be derived from the player collection. |
-| **Airplanes** — a new unit type that is always spotted, with its own vision rating and a placeholder stealth value. Placed during the active player's movement phase, removed at end of turn. When placed, the turn pauses and the other player gets a chance to mark any of their units as firing at the airplane (which spots those units), then the turn resumes with the active player. Airplanes also spot enemy units while present. | Unit model must support an "always spotted" flag rather than assuming all units obey the standard fog-of-war rules. Turn flow must support nested/interruptible phases where control briefly passes to the non-active player and returns. Unit collections must support transient units that are added and removed within a single turn. The vision system must treat any unit (including airplanes) as a potential spotter. |
-| **Mines and the Engineer modifier** — mines are non-unit map entities placed as points with a stealth rating and 0" vision. Placeable at deployment or during gameplay. **All non-airplane units** spot a mine when they move over it and end on top of it (the app marks the mine spotted and a token is placed on the table). Additionally, units with the **Recon** or **Engineer** modifier (Engineer is a new modifier strictly for mine detection — does not affect vision/stealth) detect mines via normal end-of-movement vision checks. | Map entity model must support entities that are not units but participate in vision (have stealth) — terrain alone is not enough. Unit modifiers should be a list/collection rather than a fixed set of boolean fields, so adding `Engineer` alongside `Recon` is additive. Movement handling should distinguish "final position" from "path traveled" so future detection-on-path logic can be added. |
+| **Airplanes** — a new unit type that is always Revealed, with its own vision rating and a placeholder stealth value. Placed during the active player's movement phase, removed at end of turn. When placed, the turn pauses and the other player gets a chance to mark any of their units as firing at the airplane (which Reveals those units), then the turn resumes with the active player. Airplanes also detect enemy units (via the standard vision phase) while present. | Unit model must support an "always Revealed" flag rather than assuming all units obey the standard fog-of-war rules. Turn flow must support nested/interruptible phases where control briefly passes to the non-active player and returns. Unit collections must support transient units that are added and removed within a single turn. The vision system must treat any unit (including airplanes) as a potential detector. |
+| **Mines and the Engineer modifier** — mines are non-unit map entities placed as points with a stealth rating and 0" vision. Placeable at deployment or during gameplay. **All non-airplane units** Reveal a mine when they move over it and end on top of it (the app marks the mine Revealed and a token is placed on the table). Additionally, units with the **Recon** or **Engineer** modifier (Engineer is a new modifier strictly for mine detection — does not affect vision/stealth) can Discover mines via the normal vision phase. | Map entity model must support entities that are not units but participate in vision (have stealth) — terrain alone is not enough. Unit modifiers should be a list/collection rather than a fixed set of boolean fields, so adding `Engineer` alongside `Recon` is additive. Movement handling should distinguish "final position" from "path traveled" so future detection-on-path logic can be added. |
 
 ---
 
@@ -259,9 +318,13 @@ Features expected in a future version. **The v1 architecture must avoid one-way 
 
 | Term | Definition |
 |------|-----------|
-| Detected | An enemy unit that a friendly unit can see (private knowledge — appears in the detecting player's app view but not necessarily on the table) |
-| Spotted | An enemy unit whose position is publicly known and must be represented on the physical table |
-| Mutual detection | Two units (one from each player) that detect each other simultaneously — causes both to become spotted |
+| `See` | Geometric line-of-sight check — a ray from A to B is not interrupted by sight-blocking rules. Distance and stealth are not considered. |
+| `Discover` | A `See`s B AND distance(A, B) ≤ A.vision / B.effective_stealth. The full vision/stealth check used to initiate detection. |
+| Individual detection list | Per-unit set of enemy units this unit has detected |
+| Team detection list | Per-team set of all enemies any team unit has detected, plus all currently Revealed enemy units |
+| Revealed | An enemy unit whose position is publicly known and must be represented on the physical table |
+| Mutual detection | A unit X and an enemy Y are each on the other's individual detection list — causes both to become Revealed |
+| Vision phase | The end-of-move algorithm that updates detection lists and the Revealed set (see Section 3.3) |
 | Dug In | Infantry state providing a 2x stealth modifier; persists until explicitly cleared |
 | Recon | Unit modifier multiplying vision and stealth by 4/3 |
 | Blocking terrain | Terrain that fully interrupts a ray (tall wall, building with two wall intersections, tall woods beyond 4") |

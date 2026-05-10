@@ -2,6 +2,7 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import { useEffect, useRef, useState } from "react";
 import { Layer, Rect, Stage } from "react-konva";
 import type { GameMap } from "../core/map/GameMap.js";
+import type { TeamId } from "../core/types.js";
 import type { Unit } from "../core/units/Unit.js";
 import { TerrainPolygonShape } from "./TerrainPolygonShape.js";
 import { TerrainWallShape } from "./TerrainWallShape.js";
@@ -15,9 +16,10 @@ const MAX_SCALE = 6;
 interface Props {
   map: GameMap;
   units: readonly Unit[];
+  perspectiveTeamId: TeamId;
 }
 
-export function MapCanvas({ map, units }: Props) {
+export function MapCanvas({ map, units, perspectiveTeamId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [scale, setScale] = useState(1);
@@ -85,7 +87,12 @@ export function MapCanvas({ map, units }: Props) {
               <TerrainWallShape key={w.id} wall={w} pixelsPerInch={PIXELS_PER_INCH} />
             ))}
             {units.map((u) => (
-              <UnitToken key={u.id} unit={u} pixelsPerInch={PIXELS_PER_INCH} />
+              <UnitToken
+                key={u.id}
+                unit={u}
+                pixelsPerInch={PIXELS_PER_INCH}
+                perspectiveTeamId={perspectiveTeamId}
+              />
             ))}
           </Layer>
         </Stage>

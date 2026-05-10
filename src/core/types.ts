@@ -13,6 +13,8 @@ export interface Segment {
 
 export type UnitType = "Infantry" | "Tank";
 
+export type UnitSize = "Squad" | "Platoon" | "Company" | "Battalion";
+
 export type Modifier = "Recon";
 
 export type WallType = "Short" | "Tall";

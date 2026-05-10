@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TerrainPolygon } from "./TerrainPolygon.js";
+import { TerrainPolygon } from "../../../src/core/map/TerrainPolygon.js";
 
 const square = [
   { x: 0, y: 0 },

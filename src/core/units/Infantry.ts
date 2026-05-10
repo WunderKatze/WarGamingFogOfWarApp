@@ -1,4 +1,4 @@
-import { dugInStealthModifier } from "./config.js";
+import { dugInStealthModifier } from "../config.js";
 import { Unit, type UnitInit } from "./Unit.js";
 
 export interface InfantryInit extends UnitInit {

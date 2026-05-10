@@ -1,4 +1,4 @@
-import type { Point } from "./types.js";
+import type { Point } from "../types.js";
 
 const EPSILON = 1e-9;
 

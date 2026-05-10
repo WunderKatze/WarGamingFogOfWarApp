@@ -17,5 +17,5 @@
     "types": ["vitest/globals", "node"],
     "outDir": "./dist"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "tests/**/*"]
 }

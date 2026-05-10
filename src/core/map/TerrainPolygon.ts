@@ -1,5 +1,5 @@
 import { pointInPolygon } from "./geometry.js";
-import type { Point, PolygonTerrainType, Segment } from "./types.js";
+import type { Point, PolygonTerrainType, Segment } from "../types.js";
 
 export interface TerrainPolygonInit {
   id: string;

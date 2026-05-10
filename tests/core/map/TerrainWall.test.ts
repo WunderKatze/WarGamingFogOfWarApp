@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TerrainWall } from "./TerrainWall.js";
+import { TerrainWall } from "../../../src/core/map/TerrainWall.js";
 
 describe("TerrainWall", () => {
   it("stores its id, endpoints, and wall type", () => {

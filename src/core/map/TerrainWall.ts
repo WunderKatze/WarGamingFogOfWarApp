@@ -1,4 +1,4 @@
-import type { Point, WallType } from "./types.js";
+import type { Point, WallType } from "../types.js";
 
 export interface TerrainWallInit {
   id: string;

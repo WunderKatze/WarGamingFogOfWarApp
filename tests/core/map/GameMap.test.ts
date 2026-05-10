@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   polygonStealthModifier,
   shortWallStealthModifier,
-} from "./config.js";
-import { GameMap } from "./GameMap.js";
-import { TerrainPolygon } from "./TerrainPolygon.js";
-import { TerrainWall } from "./TerrainWall.js";
-import type { Point } from "./types.js";
+} from "../../../src/core/config.js";
+import { GameMap } from "../../../src/core/map/GameMap.js";
+import { TerrainPolygon } from "../../../src/core/map/TerrainPolygon.js";
+import { TerrainWall } from "../../../src/core/map/TerrainWall.js";
+import type { Point } from "../../../src/core/types.js";
 
 const p = (x: number, y: number): Point => ({ x, y });
 

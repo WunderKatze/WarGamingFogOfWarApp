@@ -2,7 +2,7 @@ import {
   polygonStealthModifier,
   shortWallStealthModifier,
   tallWoodsRayThroughLimit,
-} from "./config.js";
+} from "../config.js";
 import {
   segmentEdgeIntersectionCount,
   segmentIntersection,
@@ -10,7 +10,7 @@ import {
 } from "./geometry.js";
 import type { TerrainPolygon } from "./TerrainPolygon.js";
 import type { TerrainWall } from "./TerrainWall.js";
-import type { Point } from "./types.js";
+import type { Point } from "../types.js";
 
 export interface MapBackdrop {
   /** Photo bytes, typically a base64 data URL embedded in the map file. */

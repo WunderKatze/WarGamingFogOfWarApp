@@ -1,5 +1,5 @@
-import { modifierEffects, unitTypeStats } from "./config.js";
-import type { Modifier, Point, UnitType } from "./types.js";
+import { modifierEffects, unitTypeStats } from "../config.js";
+import type { Modifier, Point, UnitType } from "../types.js";
 
 export interface UnitInit {
   id: string;

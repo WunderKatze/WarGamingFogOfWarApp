@@ -5,8 +5,8 @@ import {
   segmentEdgeIntersectionCount,
   segmentIntersection,
   segmentLengthInsidePolygon,
-} from "./geometry.js";
-import type { Point } from "./types.js";
+} from "../../../src/core/map/geometry.js";
+import type { Point } from "../../../src/core/types.js";
 
 const p = (x: number, y: number): Point => ({ x, y });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dugInStealthModifier, modifierEffects, unitTypeStats } from "./config.js";
-import { Infantry } from "./Infantry.js";
+import { dugInStealthModifier, modifierEffects, unitTypeStats } from "../../../src/core/config.js";
+import { Infantry } from "../../../src/core/units/Infantry.js";
 
 const at = (x: number, y: number) => ({ x, y });
 

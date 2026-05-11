@@ -1,6 +1,6 @@
 import { Line } from "react-konva";
-import type { TerrainPolygon } from "../core/map/TerrainPolygon.js";
-import type { PolygonTerrainType } from "../core/types.js";
+import type { TerrainPolygon } from "../../core/map/TerrainPolygon.js";
+import type { PolygonTerrainType } from "../../core/types.js";
 
 const TERRAIN_FILL: Record<PolygonTerrainType, string> = {
   Building: "#9a9a9a",
@@ -26,6 +26,7 @@ export function TerrainPolygonShape({ polygon, pixelsPerInch }: Props) {
       stroke="#333"
       strokeWidth={1}
       opacity={0.7}
+      listening={false}
     />
   );
 }

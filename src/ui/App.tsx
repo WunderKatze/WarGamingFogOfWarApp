@@ -1,12 +1,13 @@
-import { useState } from "react";
 import { GameMap } from "../core/map/GameMap.js";
 import { TerrainPolygon } from "../core/map/TerrainPolygon.js";
 import { TerrainWall } from "../core/map/TerrainWall.js";
-import type { TeamId } from "../core/types.js";
-import { Infantry } from "../core/units/Infantry.js";
-import { Tank } from "../core/units/Tank.js";
-import type { Unit } from "../core/units/Unit.js";
-import { MapCanvas } from "./MapCanvas.js";
+import { useGame } from "./hooks/useGame.js";
+import { GameProvider, useGameContext } from "./hooks/useGameContext.js";
+import { theme } from "./theme.js";
+import { DeploymentView } from "./views/DeploymentView.js";
+import { FireDeclareView } from "./views/FireDeclareView.js";
+import { MoveView } from "./views/MoveView.js";
+import { TransitionView } from "./views/TransitionView.js";
 
 function buildDemoMap(): GameMap {
   return new GameMap({
@@ -50,82 +51,92 @@ function buildDemoMap(): GameMap {
   });
 }
 
-function buildDemoUnits(): Unit[] {
-  return [
-    new Tank({
-      id: "t1", name: "M4 Co", teamId: "A",
-      position: { x: 12, y: 8 }, size: "Company",
-    }),
-    new Infantry({
-      id: "i1", name: "1st Pl", teamId: "A",
-      position: { x: 18, y: 20 }, dugIn: true,
-    }),
-    new Tank({
-      id: "t2", name: "Recon Sec", teamId: "A",
-      position: { x: 8, y: 28 }, size: "Squad", modifiers: ["Recon"],
-    }),
-    new Tank({
-      id: "t3", name: "Panther Bn", teamId: "B",
-      position: { x: 84, y: 12 }, size: "Battalion",
-    }),
-    new Infantry({
-      id: "i2", name: "Grenadier", teamId: "B",
-      position: { x: 70, y: 38 },
-    }),
-    new Infantry({
-      id: "i3", name: "Recon Sqd", teamId: "B",
-      position: { x: 88, y: 50 }, size: "Squad", modifiers: ["Recon"],
-    }),
-  ];
-}
-
 export function App() {
-  const [perspectiveTeamId, setPerspectiveTeamId] = useState<TeamId>("A");
-  const map = buildDemoMap();
-  const units = buildDemoUnits();
-
-  const togglePerspective = () =>
-    setPerspectiveTeamId((p) => (p === "A" ? "B" : "A"));
+  const { game, dispatch, reset } = useGame(() => ({
+    map: buildDemoMap(),
+    players: ["A", "B"],
+  }));
 
   return (
-    <>
-      <header
-        style={{
-          padding: "8px 16px",
-          background: "#222",
-          color: "#eee",
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-        }}
-      >
-        <strong>WarGaming Fog of War</strong>
-        <span style={{ opacity: 0.7, fontSize: 13 }}>
-          UI scaffold — drag to pan, scroll to zoom. Fog of war not yet applied.
-        </span>
-        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 13, opacity: 0.8 }}>
-            Viewing as Team <strong>{perspectiveTeamId}</strong>
-          </span>
-          <button
-            type="button"
-            onClick={togglePerspective}
-            style={{
-              padding: "4px 10px",
-              background: "#444",
-              color: "#eee",
-              border: "1px solid #666",
-              borderRadius: 3,
-              cursor: "pointer",
-            }}
-          >
-            Flip perspective
-          </button>
-        </span>
-      </header>
-      <main style={{ flex: 1, minHeight: 0, background: "#f6f3ee" }}>
-        <MapCanvas map={map} units={units} perspectiveTeamId={perspectiveTeamId} />
-      </main>
-    </>
+    <GameProvider value={{ game, dispatch, reset }}>
+      <Header />
+      <PhaseRouter />
+      <RestartButton />
+    </GameProvider>
   );
+}
+
+function RestartButton() {
+  const { reset } = useGameContext();
+  const handleClick = () => {
+    if (window.confirm("Restart game? All units and turn progress will be lost.")) {
+      reset();
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      style={{
+        position: "fixed",
+        bottom: theme.spacing.lg,
+        left: theme.spacing.lg,
+        padding: `${theme.spacing.sm}px ${theme.spacing.lg}px`,
+        background: "rgba(255,255,255,0.92)",
+        color: theme.colors.text,
+        border: `1px solid ${theme.colors.sidebarBorder}`,
+        borderRadius: theme.radius.sm,
+        fontSize: theme.fontSize.sm,
+        cursor: "pointer",
+        zIndex: 1000,
+      }}
+    >
+      Restart game
+    </button>
+  );
+}
+
+function Header() {
+  const { game } = useGameContext();
+  const { phase, turnNumber } = game.state;
+  const active = game.state.getActivePlayer();
+  return (
+    <header
+      style={{
+        padding: `${theme.spacing.md}px ${theme.spacing.xl}px`,
+        background: theme.colors.headerBg,
+        color: theme.colors.headerText,
+        display: "flex",
+        alignItems: "center",
+        gap: theme.spacing.xl,
+        fontSize: theme.fontSize.base,
+      }}
+    >
+      <strong>WarGaming Fog of War</strong>
+      <span style={{ opacity: 0.6 }}>·</span>
+      <span>Phase: <strong>{phase}</strong></span>
+      <span style={{ opacity: 0.6 }}>·</span>
+      <span>Active: <strong>Team {active}</strong></span>
+      {turnNumber > 0 && (
+        <>
+          <span style={{ opacity: 0.6 }}>·</span>
+          <span>Turn <strong>{turnNumber}</strong></span>
+        </>
+      )}
+    </header>
+  );
+}
+
+function PhaseRouter() {
+  const { game } = useGameContext();
+  switch (game.state.phase) {
+    case "Deploy":
+      return <DeploymentView />;
+    case "Transition":
+      return <TransitionView />;
+    case "Move":
+      return <MoveView />;
+    case "FireDeclare":
+      return <FireDeclareView />;
+  }
 }

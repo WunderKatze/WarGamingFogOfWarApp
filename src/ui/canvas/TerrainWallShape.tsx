@@ -1,5 +1,5 @@
 import { Line } from "react-konva";
-import type { TerrainWall } from "../core/map/TerrainWall.js";
+import type { TerrainWall } from "../../core/map/TerrainWall.js";
 
 interface Props {
   wall: TerrainWall;
@@ -19,6 +19,7 @@ export function TerrainWallShape({ wall, pixelsPerInch }: Props) {
       stroke={isTall ? "#000" : "#777"}
       strokeWidth={isTall ? 5 : 3}
       lineCap="round"
+      listening={false}
     />
   );
 }

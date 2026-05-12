@@ -98,7 +98,29 @@ export class Game {
   moveUnit(unitId: UnitId, newPosition: Point): void {
     this.requirePhase("Move");
     const unit = this.requireOwnUnit(unitId);
+    this.state.moveHistory.push({ unitId, priorPosition: unit.getPosition() });
     unit.setPosition(newPosition);
+  }
+
+  /**
+   * Pops the most recent entry from `moveHistory` and restores that unit's
+   * prior position. If the popped entry's unit no longer exists (it was
+   * deleted since), silently skips it and pops the next one, until either a
+   * living unit is restored or the stack is empty.
+   *
+   * Does **not** run the vision phase — vision only runs at the
+   * `startTurn`/`endMove`/`endTurn` cadence per requirements §3.4.
+   */
+  undoLastMove(): void {
+    this.requirePhase("Move");
+    while (this.state.moveHistory.length > 0) {
+      const entry = this.state.moveHistory.pop()!;
+      const unit = this.state.getUnitById(entry.unitId);
+      if (unit) {
+        unit.setPosition(entry.priorPosition);
+        return;
+      }
+    }
   }
 
   deleteUnit(unitId: UnitId): void {
@@ -127,6 +149,7 @@ export class Game {
 
   endMove(): void {
     this.requirePhase("Move");
+    this.state.moveHistory = [];
     this.state.phase = "FireDeclare";
     this.runVisionPhase(new Set());
   }

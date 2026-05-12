@@ -1,7 +1,18 @@
 import { GameMap } from "./map/GameMap.js";
-import type { TeamId, UnitId } from "./types.js";
+import type { Point, TeamId, UnitId } from "./types.js";
 import { Unit } from "./units/Unit.js";
 import { createEmptyVisionState, type VisionState } from "./VisionState.js";
+
+/**
+ * One entry in the per-Move-phase undo stack. Records the unit and the
+ * position it occupied immediately before the move that's being recorded.
+ * A multi-segment waypoint path produces a single entry whose
+ * `priorPosition` is the pre-path position.
+ */
+export interface MoveHistoryEntry {
+  unitId: UnitId;
+  priorPosition: Point;
+}
 
 export type GamePhase = "Deploy" | "Transition" | "Move" | "FireDeclare";
 
@@ -44,6 +55,13 @@ export class GameState {
 
   /** Team ids that have finished their initial deployment. */
   deployedPlayers = new Set<TeamId>();
+
+  /**
+   * Per-Move-phase undo stack: each entry records a unit's position prior to
+   * a committed move. Cleared on `endMove`. See feature
+   * docs/features/movement-preview-and-undo.md.
+   */
+  moveHistory: MoveHistoryEntry[] = [];
 
   constructor(init: GameStateInit) {
     if (init.players.length < 2) {

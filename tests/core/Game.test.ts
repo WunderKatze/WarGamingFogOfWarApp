@@ -171,6 +171,80 @@ describe("Game — Move phase", () => {
   });
 });
 
+describe("Game — move history and undo", () => {
+  function setupAtMove(): Game {
+    const g = makeGame();
+    g.deployUnit({ type: "Tank", name: "A1", position: p(0, 0) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Tank", name: "B1", position: p(200, 200) });
+    g.endDeployment();
+    g.startTurn();
+    return g;
+  }
+
+  it("moveUnit pushes the unit's prior position onto moveHistory", () => {
+    const g = setupAtMove();
+    g.moveUnit("u1", p(5, 5));
+    expect(g.state.moveHistory).toEqual([
+      { unitId: "u1", priorPosition: { x: 0, y: 0 } },
+    ]);
+  });
+
+  it("undoLastMove restores the unit's prior position and pops the entry", () => {
+    const g = setupAtMove();
+    g.moveUnit("u1", p(5, 5));
+    g.undoLastMove();
+    expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 0, y: 0 });
+    expect(g.state.moveHistory).toEqual([]);
+  });
+
+  it("undoLastMove walks back through multiple moves in LIFO order", () => {
+    const g = setupAtMove();
+    g.moveUnit("u1", p(5, 5));
+    g.moveUnit("u1", p(10, 10));
+    g.moveUnit("u1", p(15, 15));
+    g.undoLastMove();
+    expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 10, y: 10 });
+    g.undoLastMove();
+    expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 5, y: 5 });
+    g.undoLastMove();
+    expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 0, y: 0 });
+    expect(g.state.moveHistory).toEqual([]);
+  });
+
+  it("undoLastMove on an empty history is a no-op", () => {
+    const g = setupAtMove();
+    expect(() => g.undoLastMove()).not.toThrow();
+    expect(g.state.moveHistory).toEqual([]);
+  });
+
+  it("undoLastMove skips entries for units that have since been deleted", () => {
+    const g = setupAtMove();
+    const inf = g.createUnit({ type: "Infantry", name: "I", position: p(1, 1) });
+    g.moveUnit("u1", p(5, 5));     // entry for u1
+    g.moveUnit(inf.id, p(9, 9));   // entry for infantry (top of stack)
+    g.deleteUnit(inf.id);          // infantry's entry is now an orphan
+    g.undoLastMove();              // should skip the orphan and restore u1
+    expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 0, y: 0 });
+    expect(g.state.moveHistory).toEqual([]);
+  });
+
+  it("endMove clears moveHistory", () => {
+    const g = setupAtMove();
+    g.moveUnit("u1", p(5, 5));
+    g.moveUnit("u1", p(10, 10));
+    g.endMove();
+    expect(g.state.moveHistory).toEqual([]);
+  });
+
+  it("undoLastMove throws when called outside Move phase", () => {
+    const g = setupAtMove();
+    g.endMove(); // → FireDeclare
+    expect(() => g.undoLastMove()).toThrow(/Invalid phase/);
+  });
+});
+
 describe("Game — FireDeclare phase and end of turn", () => {
   // Units placed far apart so neither can discover the other; firing is the
   // only way to put something into Revealed.

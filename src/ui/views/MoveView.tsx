@@ -4,6 +4,7 @@ import type { Point, UnitId } from "../../core/types.js";
 import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
+import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 
@@ -15,23 +16,56 @@ function getVisibleUnits(game: Game): Unit[] {
   );
 }
 
+/**
+ * Transient state for the live move preview. Not stored in GameState — the
+ * preview is purely a UI artifact and doesn't affect committed game state
+ * until the player commits via a map click.
+ */
+interface ActiveMove {
+  unitId: UnitId;
+  origin: Point;
+  cursor: Point;
+}
+
 export function MoveView() {
   const { game, dispatch } = useGameContext();
   const active = game.state.getActivePlayer();
   const [selectedId, setSelectedId] = useState<UnitId | undefined>(undefined);
+  const [activeMove, setActiveMove] = useState<ActiveMove | null>(null);
 
   const visible = getVisibleUnits(game);
-  const selected = selectedId ? game.state.getUnitById(selectedId) : undefined;
+  const effectiveSelectedId = activeMove?.unitId ?? selectedId;
+  const selected = effectiveSelectedId ? game.state.getUnitById(effectiveSelectedId) : undefined;
   const canUndo = game.state.moveHistory.length > 0;
 
-  const handleUnitClick = (unit: Unit) => {
-    if (unit.teamId !== active) return; // can only select own units
+  const startActiveMove = (unit: Unit) => {
+    const origin = unit.getPosition();
+    setActiveMove({ unitId: unit.id, origin, cursor: origin });
     setSelectedId(unit.id);
   };
 
+  const handleUnitClick = (unit: Unit) => {
+    if (unit.teamId !== active) return; // enemy clicks are a no-op for now
+    if (activeMove && activeMove.unitId === unit.id) {
+      // Clicking the ghost cancels the active move (per §2.4).
+      setActiveMove(null);
+      return;
+    }
+    // Clicking any other own unit (whether or not there's an active move)
+    // starts a fresh active move on that unit.
+    startActiveMove(unit);
+  };
+
   const handleMapClick = (position: Point) => {
-    if (!selectedId) return;
-    dispatch((g) => g.moveUnit(selectedId, position));
+    if (!activeMove) return;
+    const { unitId } = activeMove;
+    dispatch((g) => g.moveUnit(unitId, position));
+    setActiveMove(null);
+  };
+
+  const handlePointerMove = (position: Point) => {
+    if (!activeMove) return;
+    setActiveMove({ ...activeMove, cursor: position });
   };
 
   const undoLastMove = () => {
@@ -39,12 +73,18 @@ export function MoveView() {
   };
 
   const endMove = () => {
+    // Active move is implicitly cancelled (no commit) per §4.
+    setActiveMove(null);
     setSelectedId(undefined);
     dispatch((g) => g.endMove());
   };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setActiveMove(null);
+        return;
+      }
       // Ctrl+Z / Cmd+Z = undo. Shift+Ctrl+Z is conventionally redo — ignore it.
       const isUndoChord = (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z";
       if (!isUndoChord) return;
@@ -100,7 +140,9 @@ export function MoveView() {
                 </div>
               )}
               <p style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
-                Click an empty spot on the map to move.
+                {activeMove
+                  ? "Click empty map to commit, click the ghost or press Esc to cancel."
+                  : "Click an empty spot on the map to move."}
               </p>
             </div>
           ) : (
@@ -117,7 +159,7 @@ export function MoveView() {
                 key={u.id}
                 style={{
                   ...listItemStyle,
-                  fontWeight: u.id === selectedId ? 600 : 400,
+                  fontWeight: u.id === effectiveSelectedId ? 600 : 400,
                   opacity: u.teamId === active ? 1 : 0.65,
                 }}
               >
@@ -141,10 +183,26 @@ export function MoveView() {
           map={game.state.map}
           units={visible}
           perspectiveTeamId={active}
-          selectedUnitId={selectedId}
+          selectedUnitId={effectiveSelectedId}
           revealedUnitIds={game.state.visionState.revealed}
+          ghostUnitId={activeMove?.unitId}
+          strictUnitSelect={!!activeMove}
           onUnitClick={handleUnitClick}
           onMapClick={handleMapClick}
+          onMapPointerMove={handlePointerMove}
+          draggable={!activeMove}
+          overlay={
+            activeMove && selected
+              ? (
+                <MovePreviewOverlay
+                  unit={selected}
+                  origin={activeMove.origin}
+                  cursor={activeMove.cursor}
+                  perspectiveTeamId={active}
+                />
+              )
+              : null
+          }
         />
       </main>
     </div>

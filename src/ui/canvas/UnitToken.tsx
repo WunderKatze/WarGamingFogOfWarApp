@@ -2,7 +2,7 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import ms from "milsymbol";
 import { useMemo } from "react";
 import { Circle, Group, Image as KonvaImage, Line, Text } from "react-konva";
-import type { TeamId, UnitSize, UnitType } from "../../core/types.js";
+import type { Point, TeamId, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { theme } from "../theme.js";
 
@@ -57,6 +57,22 @@ interface Props {
   fired?: boolean;
   /** True if this unit's position is publicly known (on the physical table). */
   revealed?: boolean;
+  /**
+   * If set, the token renders at this position (in inch coords) instead of
+   * `unit.getPosition()`. Used during the Move-phase live preview so the same
+   * token visual can follow the cursor without mutating game state.
+   */
+  positionOverride?: Point;
+  /** Render at reduced opacity (used for the ghost during a live preview). */
+  ghosted?: boolean;
+  /**
+   * When true (default), the entire token visual is clickable — easier to
+   * grab a unit. When false, only the position dot is clickable; the symbol,
+   * name, stem, and rings pass clicks through. Strict mode is used during an
+   * active move so the player doesn't accidentally re-select a different
+   * unit by hovering near its symbol.
+   */
+  easySelect?: boolean;
   onClick?: () => void;
 }
 
@@ -78,9 +94,12 @@ export function UnitToken({
   selected = false,
   fired = false,
   revealed = false,
+  positionOverride,
+  ghosted = false,
+  easySelect = true,
   onClick,
 }: Props) {
-  const pos = unit.getPosition();
+  const pos = positionOverride ?? unit.getPosition();
   const x = pos.x * pixelsPerInch;
   const y = pos.y * pixelsPerInch;
 
@@ -113,8 +132,21 @@ export function UnitToken({
     onClick();
   };
 
+  // In easy-select mode the whole token Group listens (decorative children
+  // bubble clicks up). In strict mode every decorative child has
+  // `listening={false}` so only the position dot intercepts clicks. The dot
+  // always carries its own onClick + cancelBubble so it remains clickable in
+  // either mode without double-firing the Group handler.
+  const groupHandlers = easySelect ? { onClick: handleClick, onTap: handleClick } : {};
+  const decorativeListening = easySelect;
+
   return (
-    <Group x={x} y={y} onClick={handleClick} onTap={handleClick}>
+    <Group
+      x={x}
+      y={y}
+      opacity={ghosted ? 0.3 : 1}
+      {...groupHandlers}
+    >
       {/* Stem line — back layer so symbol & dot draw over it */}
       {stemTopY < stemBottomY && (
         <Line
@@ -122,10 +154,14 @@ export function UnitToken({
           stroke={theme.colors.text}
           strokeWidth={1}
           opacity={0.55}
+          listening={decorativeListening}
         />
       )}
 
-      {/* Decoration rings encircle the symbol, not the dot */}
+      {/* Decoration rings encircle the symbol, not the dot. The revealed ring
+          is the widest decoration and extends well beyond the symbol — it's
+          purely a status indicator and always non-listening so it never
+          obstructs clicks on adjacent units. */}
       {revealed && (
         <Circle
           y={symbolCenterY}
@@ -134,6 +170,7 @@ export function UnitToken({
           strokeWidth={1}
           dash={[2, 2]}
           opacity={0.5}
+          listening={false}
         />
       )}
       {fired && (
@@ -142,6 +179,7 @@ export function UnitToken({
           radius={ringRadius + 2}
           stroke={theme.colors.firedRing}
           strokeWidth={2.5}
+          listening={decorativeListening}
         />
       )}
       {selected && (
@@ -151,6 +189,7 @@ export function UnitToken({
           stroke={theme.colors.selectionRing}
           strokeWidth={2.5}
           dash={[4, 3]}
+          listening={decorativeListening}
         />
       )}
 
@@ -159,6 +198,7 @@ export function UnitToken({
         image={canvas}
         x={-width / 2}
         y={symbolCenterY - height / 2}
+        listening={decorativeListening}
       />
 
       {/* Name tag */}
@@ -170,12 +210,17 @@ export function UnitToken({
         fontSize={NAME_TAG_FONT_SIZE}
         fill={theme.colors.text}
         align="center"
+        listening={decorativeListening}
       />
 
       {/* Position dot at the unit's actual (x, y), drawn last so it's on top.
-          Colored by affiliation so it reads as a team marker, not as a NATO
-          size amplifier. */}
-      <Circle radius={POSITION_DOT_RADIUS} fill={dotColor} />
+          Always listens — in strict mode it's the only clickable element. */}
+      <Circle
+        radius={POSITION_DOT_RADIUS}
+        fill={dotColor}
+        onClick={handleClick}
+        onTap={handleClick}
+      />
     </Group>
   );
 }

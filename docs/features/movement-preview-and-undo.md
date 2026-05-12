@@ -58,15 +58,14 @@ There are **two independent distance displays** rendered during a move. They sha
 **Display 1 — Cursor pill (always rendered):**
 - Anchored to the **live unit symbol** at the cursor.
 - Shows the **full move info**: total path distance from ghost through any waypoints to the current cursor (for a straight-line move this is just the single segment's distance).
-- **Placement** relative to the live unit symbol:
-  - If the unit is moving **up** (live above ghost), pill sits **below** the symbol.
-  - If the unit is moving **down** (live below ghost), pill sits **above** the symbol.
+- **Placement:** always **above** the live unit symbol. (Earlier draft had the pill flip above/below based on direction; in practice that placed the pill under the mouse cursor on upward moves and was hard to read. Always-above is stable and never occluded.)
 - This display is what the player relies on for the authoritative reading; it's guaranteed legible regardless of segment geometry.
 
-**Display 2 — Per-segment pill (rendered when there's room):**
+**Display 2 — Per-segment pill (waypoint paths only):**
 - One pill per dashed segment, **centered on the segment**, breaking the dashes so the text doesn't overlap them.
 - Shows that segment's individual distance.
-- If a segment is too short to render the pill cleanly (text would overlap the segment endpoints or other UI), the per-segment pill for that segment is **omitted** — the player falls back on the cursor pill (Display 1) for total distance.
+- **Only rendered for waypoint paths (≥2 segments).** For a straight-line move, Display 1 already shows the only useful number; a duplicate label centered on the line was found in practice to clutter the canvas without adding information.
+- If a waypoint segment is too short to render the pill cleanly, that segment's pill is **omitted** — the player falls back on the cursor pill (Display 1) for total distance.
 
 ### 2.6 Undoing a move
 - An **"Undo last move"** button appears in the Move-phase sidebar whenever the move history is non-empty.
@@ -183,7 +182,7 @@ Independent of the chronological undo stack, the player can snap an individual u
 | 4 | **Distance label format:** `12.3"` | Inches, one decimal. |
 | 5 | **Escape cancels** | Yes. |
 | 6 | **Clicks outside the canvas:** no effect | Don't cancel, don't commit. Sidebar buttons (Undo, End Move, Waypoint toggle) still operate normally. |
-| 7 | **Line and label visuals** | Dashed line in team color (not grey/black — avoids reading as terrain). Two distance displays per §2.5: a cursor pill (always rendered, above/below symbol based on direction) plus per-segment pills centered on each segment (omitted if the segment is too short to render cleanly). |
+| 7 | **Line and label visuals** | Dashed line in team color (not grey/black — avoids reading as terrain). Two distance displays per §2.5: a cursor pill (always rendered, always above the unit symbol — the original "flip above/below" rule was dropped after testing because the upward-direction flip put the label under the mouse cursor) plus per-segment pills centered on each segment (omitted if the segment is too short to render cleanly). |
 | 8 | **Where move history lives** | In `GameState` as `moveHistory: Array<{ unitId; priorPosition }>`, cleared on `endMove`. `Game.undoLastMove()` is a new action method. Putting it in `GameState` (rather than UI state) is a deliberate forward investment toward a future replay / history feature, while keeping the v1 contract simple: history is per-Move-phase only and not persisted across turns. |
 | 9 | **Waypoint trigger** | Hold **Shift** OR sidebar **Waypoint mode** toggle. The toggle exists primarily for touch / keyboardless play. |
 | 10 | **Waypoint undo granularity** | A multi-segment path commits as **one** move; one undo restores the unit to its position before the first click of that path. |

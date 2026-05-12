@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Game } from "../../core/Game.js";
 import type { Point, UnitId } from "../../core/types.js";
 import { Infantry } from "../../core/units/Infantry.js";
@@ -22,6 +22,7 @@ export function MoveView() {
 
   const visible = getVisibleUnits(game);
   const selected = selectedId ? game.state.getUnitById(selectedId) : undefined;
+  const canUndo = game.state.moveHistory.length > 0;
 
   const handleUnitClick = (unit: Unit) => {
     if (unit.teamId !== active) return; // can only select own units
@@ -33,10 +34,35 @@ export function MoveView() {
     dispatch((g) => g.moveUnit(selectedId, position));
   };
 
+  const undoLastMove = () => {
+    dispatch((g) => g.undoLastMove());
+  };
+
   const endMove = () => {
     setSelectedId(undefined);
     dispatch((g) => g.endMove());
   };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Z / Cmd+Z = undo. Shift+Ctrl+Z is conventionally redo — ignore it.
+      const isUndoChord = (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z";
+      if (!isUndoChord) return;
+      // Don't hijack undo when the user is typing in an input.
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      e.preventDefault();
+      dispatch((g) => {
+        if (g.state.phase === "Move" && g.state.moveHistory.length > 0) {
+          g.undoLastMove();
+        }
+      });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dispatch]);
 
   return (
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
@@ -60,6 +86,16 @@ export function MoveView() {
                     onClick={() => dispatch((g) => g.toggleDugIn(selected.id))}
                   >
                     {selected.dugIn ? "Stand up" : "Dig in"}
+                  </SidebarButton>
+                </div>
+              )}
+              {game.state.moveHistory.some((e) => e.unitId === selected.id) && (
+                <div style={{ marginTop: 8 }}>
+                  <SidebarButton
+                    variant="secondary"
+                    onClick={() => dispatch((g) => g.revertUnitMoves(selected.id))}
+                  >
+                    Snap to turn start
                   </SidebarButton>
                 </div>
               )}
@@ -91,6 +127,12 @@ export function MoveView() {
             ))}
           </ul>
         </SidebarSection>
+
+        {canUndo && (
+          <SidebarButton variant="secondary" onClick={undoLastMove}>
+            Undo last move (Ctrl+Z)
+          </SidebarButton>
+        )}
 
         <SidebarButton onClick={endMove}>End Move</SidebarButton>
       </Sidebar>

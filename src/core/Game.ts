@@ -123,6 +123,24 @@ export class Game {
     }
   }
 
+  /**
+   * Snap a single unit back to its position at the start of the current Move
+   * phase, surgically removing all of that unit's entries from `moveHistory`
+   * while leaving every other unit's history intact. No-op if the unit has
+   * made no moves this phase.
+   *
+   * Use case: player has moved several units, then wants to undo just one
+   * of them without rolling back everything that came after.
+   */
+  revertUnitMoves(unitId: UnitId): void {
+    this.requirePhase("Move");
+    const unit = this.requireOwnUnit(unitId);
+    const earliest = this.state.moveHistory.find((e) => e.unitId === unitId);
+    if (!earliest) return;
+    unit.setPosition(earliest.priorPosition);
+    this.state.moveHistory = this.state.moveHistory.filter((e) => e.unitId !== unitId);
+  }
+
   deleteUnit(unitId: UnitId): void {
     this.requirePhase("Move");
     this.requireOwnUnit(unitId);

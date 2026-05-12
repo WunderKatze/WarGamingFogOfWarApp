@@ -75,6 +75,14 @@ There are **two independent distance displays** rendered during a move. They sha
 - Multiple undos walk back through prior moves.
 - The move history persists for the duration of the current Move phase. **It clears when the player presses End Move.**
 
+### 2.7 Per-unit "Snap to turn start"
+Independent of the chronological undo stack, the player can snap an individual unit back to where it was at the start of the current Move phase.
+
+- A **"Snap to turn start"** button appears in the [Selected] sidebar section whenever the currently selected unit has at least one entry in `moveHistory`.
+- Pressing it restores the unit to its position at the **start of the Move phase** (i.e., the `priorPosition` of that unit's *earliest* entry in `moveHistory`) and removes **all** of that unit's entries from `moveHistory`.
+- Other units' history is untouched — subsequent Ctrl+Z presses continue to walk back through their moves chronologically.
+- Use case: "I moved my whole army, then realized I want to undo just my first unit's move without rolling back everything that came after."
+
 ---
 
 ## 3. UI sketch
@@ -210,6 +218,10 @@ There are **two independent distance displays** rendered during a move. They sha
   - If the unit still exists (`state.getUnitById(unitId)` non-null), restores its position via `unit.setPosition(priorPosition)`.
   - If the unit has been deleted since, silently pops the next entry until either a live unit is restored or the history is empty.
   - Does **not** re-run the vision phase (vision only runs at end-of-turn, per existing design).
+- `revertUnitMoves(unitId)` — new action method, validated to Move phase, requires own unit:
+  - Scans `state.moveHistory` for entries matching `unitId`.
+  - If none, no-op.
+  - Otherwise, restores the unit to the `priorPosition` of the **earliest** matching entry (the position at the start of the Move phase) and filters all matching entries out of `moveHistory`.
 - `endMove()`: after existing logic, clear `state.moveHistory = []`.
 
 **Tests (`tests/core/Game.test.ts`):**
@@ -257,7 +269,8 @@ Also track `shiftHeld: boolean` from `keydown`/`keyup` listeners; effective wayp
 **Sidebar (`MoveView`):**
 - Add the **Waypoint mode** toggle (checkbox or switch) — visible only when a unit is selected for moving.
 - Add the **Undo last move** button — visible whenever `game.state.moveHistory.length > 0`. Click → `dispatch(g => g.undoLastMove())`.
-- Hook `Ctrl+Z` at the view level (only while the view is mounted) to the same handler.
+- Add the **Snap to turn start** button inside the [Selected] section — visible only when the selected unit has at least one entry in `moveHistory`. Click → `dispatch(g => g.revertUnitMoves(selectedId))`.
+- Hook `Ctrl+Z` at the view level (only while the view is mounted) to the undo-last-move handler.
 
 **Pan suppression:** when `activeMove != null`, set `MapCanvas`'s `draggable={false}` (currently always true). Wheel-zoom path is unaffected.
 

@@ -243,6 +243,50 @@ describe("Game — move history and undo", () => {
     g.endMove(); // → FireDeclare
     expect(() => g.undoLastMove()).toThrow(/Invalid phase/);
   });
+
+  it("revertUnitMoves snaps a unit to its position at the start of the Move phase", () => {
+    const g = setupAtMove();
+    g.moveUnit("u1", p(5, 5));
+    g.moveUnit("u1", p(10, 10));
+    g.moveUnit("u1", p(15, 15));
+    g.revertUnitMoves("u1");
+    expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 0, y: 0 });
+    expect(g.state.moveHistory).toEqual([]);
+  });
+
+  it("revertUnitMoves only removes the target unit's entries, leaving others intact", () => {
+    const g = setupAtMove();
+    const inf = g.createUnit({ type: "Infantry", name: "I", position: p(1, 1) });
+    g.moveUnit("u1", p(5, 5));      // u1's first move
+    g.moveUnit(inf.id, p(2, 2));    // infantry's move (interleaved)
+    g.moveUnit("u1", p(10, 10));    // u1's second move
+    g.revertUnitMoves("u1");
+    expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 0, y: 0 });
+    // Infantry untouched at its post-move position; its entry still on the stack.
+    expect(g.state.getUnitById(inf.id)?.getPosition()).toEqual({ x: 2, y: 2 });
+    expect(g.state.moveHistory).toEqual([
+      { unitId: inf.id, priorPosition: { x: 1, y: 1 } },
+    ]);
+  });
+
+  it("revertUnitMoves on a unit with no moves this phase is a no-op", () => {
+    const g = setupAtMove();
+    expect(() => g.revertUnitMoves("u1")).not.toThrow();
+    expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 0, y: 0 });
+    expect(g.state.moveHistory).toEqual([]);
+  });
+
+  it("revertUnitMoves refuses an enemy unit", () => {
+    const g = setupAtMove();
+    expect(() => g.revertUnitMoves("u2")).toThrow(/cannot act on unit/);
+  });
+
+  it("revertUnitMoves throws when called outside Move phase", () => {
+    const g = setupAtMove();
+    g.moveUnit("u1", p(5, 5));
+    g.endMove();
+    expect(() => g.revertUnitMoves("u1")).toThrow(/Invalid phase/);
+  });
 });
 
 describe("Game — FireDeclare phase and end of turn", () => {

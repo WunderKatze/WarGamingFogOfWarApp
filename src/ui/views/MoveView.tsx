@@ -20,10 +20,15 @@ function getVisibleUnits(game: Game): Unit[] {
  * Transient state for the live move preview. Not stored in GameState — the
  * preview is purely a UI artifact and doesn't affect committed game state
  * until the player commits via a map click.
+ *
+ * `waypoints` is the in-order list of intermediate points the player has
+ * placed via Shift-click or while the sidebar Waypoint mode toggle is on.
+ * The full preview path is `origin → waypoints[0] → … → waypoints[n-1] → cursor`.
  */
 interface ActiveMove {
   unitId: UnitId;
   origin: Point;
+  waypoints: Point[];
   cursor: Point;
 }
 
@@ -32,23 +37,33 @@ export function MoveView() {
   const active = game.state.getActivePlayer();
   const [selectedId, setSelectedId] = useState<UnitId | undefined>(undefined);
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null);
+  const [shiftHeld, setShiftHeld] = useState(false);
+  const [waypointToggle, setWaypointToggle] = useState(false);
 
   const visible = getVisibleUnits(game);
   const effectiveSelectedId = activeMove?.unitId ?? selectedId;
   const selected = effectiveSelectedId ? game.state.getUnitById(effectiveSelectedId) : undefined;
   const canUndo = game.state.moveHistory.length > 0;
+  const waypointModeActive = shiftHeld || waypointToggle;
 
   const startActiveMove = (unit: Unit) => {
     const origin = unit.getPosition();
-    setActiveMove({ unitId: unit.id, origin, cursor: origin });
+    setActiveMove({ unitId: unit.id, origin, waypoints: [], cursor: origin });
     setSelectedId(unit.id);
+  };
+
+  const cancelActiveMove = () => {
+    setActiveMove(null);
+    // The sidebar toggle is sticky across moves; only Shift state is keyboard-
+    // driven. Don't auto-reset waypointToggle here — the player may want it on
+    // for the next move too.
   };
 
   const handleUnitClick = (unit: Unit) => {
     if (unit.teamId !== active) return; // enemy clicks are a no-op for now
     if (activeMove && activeMove.unitId === unit.id) {
       // Clicking the ghost cancels the active move (per §2.4).
-      setActiveMove(null);
+      cancelActiveMove();
       return;
     }
     // Clicking any other own unit (whether or not there's an active move)
@@ -58,6 +73,15 @@ export function MoveView() {
 
   const handleMapClick = (position: Point) => {
     if (!activeMove) return;
+    if (waypointModeActive) {
+      // Add a waypoint and stay in active-move mode. Future clicks may add
+      // more waypoints, or commit once the player drops waypoint mode.
+      setActiveMove({
+        ...activeMove,
+        waypoints: [...activeMove.waypoints, position],
+      });
+      return;
+    }
     const { unitId } = activeMove;
     dispatch((g) => g.moveUnit(unitId, position));
     setActiveMove(null);
@@ -81,6 +105,10 @@ export function MoveView() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") {
+        setShiftHeld(true);
+        return;
+      }
       if (e.key === "Escape") {
         setActiveMove(null);
         return;
@@ -100,8 +128,15 @@ export function MoveView() {
         }
       });
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setShiftHeld(false);
+    };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   }, [dispatch]);
 
   return (
@@ -139,9 +174,21 @@ export function MoveView() {
                   </SidebarButton>
                 </div>
               )}
+              {activeMove && (
+                <label style={waypointToggleStyle}>
+                  <input
+                    type="checkbox"
+                    checked={waypointToggle}
+                    onChange={(e) => setWaypointToggle(e.target.checked)}
+                  />
+                  Waypoint mode (or hold Shift)
+                </label>
+              )}
               <p style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
                 {activeMove
-                  ? "Click empty map to commit, click the ghost or press Esc to cancel."
+                  ? waypointModeActive
+                    ? "Click to add a waypoint. Release Shift / toggle off and click to commit. Esc cancels."
+                    : "Click empty map to commit. Hold Shift or enable Waypoint mode to add waypoints. Esc cancels."
                   : "Click an empty spot on the map to move."}
               </p>
             </div>
@@ -197,6 +244,7 @@ export function MoveView() {
                 <MovePreviewOverlay
                   unit={selected}
                   origin={activeMove.origin}
+                  waypoints={activeMove.waypoints}
                   cursor={activeMove.cursor}
                   perspectiveTeamId={active}
                 />
@@ -219,4 +267,14 @@ const listStyle: React.CSSProperties = {
 const listItemStyle: React.CSSProperties = {
   padding: "3px 0",
   borderBottom: "1px solid #eee",
+};
+
+const waypointToggleStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 12,
+  marginTop: 8,
+  cursor: "pointer",
+  userSelect: "none",
 };

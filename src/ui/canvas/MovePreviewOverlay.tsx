@@ -1,4 +1,4 @@
-import { Group, Line, Rect, Text } from "react-konva";
+import { Circle, Group, Line, Rect, Text } from "react-konva";
 import type { Point, TeamId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { theme } from "../theme.js";
@@ -20,62 +20,127 @@ const PILL_RADIUS = 3;
  */
 const CURSOR_PILL_OFFSET_ABOVE_DOT = 56;
 
+/**
+ * Minimum on-stage segment length (stage px) below which a per-segment pill
+ * is omitted. Below this the pill would crowd the segment endpoints; the
+ * cursor pill (Display 1) still carries the cumulative total regardless.
+ */
+const PER_SEGMENT_PILL_MIN_PX = 40;
+
+const WAYPOINT_MARKER_RADIUS = 2.5;
+
 interface Props {
   unit: Unit;
   origin: Point;
+  /** Intermediate waypoints in order, ghost → wp₀ → wp₁ → … → cursor. */
+  waypoints: readonly Point[];
   cursor: Point;
   perspectiveTeamId: TeamId;
 }
 
 /**
- * Visual overlay rendered while a Move-phase unit is being previewed. Renders
- * the dashed line from ghost to cursor, the live unit at the cursor, and a
- * cursor pill above the live symbol showing total distance (§2.5 Display 1).
+ * Visual overlay rendered while a Move-phase unit is being previewed. See
+ * feature doc §2.5 for the two distance displays:
+ *   1. Cursor pill — always rendered, anchored above the live unit symbol.
+ *      Shows cumulative path distance (ghost → all waypoints → cursor).
+ *   2. Per-segment pill — only rendered when the path has waypoints (≥2
+ *      segments). For a single-segment straight move the cursor pill already
+ *      shows the only useful number.
  *
- * Per-segment pills (§2.5 Display 2) are intentionally not rendered for the
- * straight-line case — they'll be reintroduced for waypoint paths where
- * per-segment distance is genuinely useful.
- *
- * This component renders inside `MapCanvas`'s overlay layer, which has
- * `listening={false}` — clicks pass through to the units / map below.
+ * Renders inside `MapCanvas`'s overlay layer (listening={false}) — clicks
+ * pass through to the units / map below.
  */
-export function MovePreviewOverlay({ unit, origin, cursor, perspectiveTeamId }: Props) {
+export function MovePreviewOverlay({
+  unit,
+  origin,
+  waypoints,
+  cursor,
+  perspectiveTeamId,
+}: Props) {
   const isFriendly = unit.teamId === perspectiveTeamId;
   const teamColor = isFriendly ? theme.colors.friendly : theme.colors.hostile;
 
   const px = theme.pixelsPerInch;
-  const originPx = { x: origin.x * px, y: origin.y * px };
-  const cursorPx = { x: cursor.x * px, y: cursor.y * px };
 
-  const dx = cursor.x - origin.x;
-  const dy = cursor.y - origin.y;
-  const distanceInches = Math.sqrt(dx * dx + dy * dy);
-  const distanceLabel = `${distanceInches.toFixed(1)}"`;
+  // Full path through every anchor point, including the live cursor at the
+  // end. Used both for the dashed line geometry and for per-segment maths.
+  const pathInches: Point[] = [origin, ...waypoints, cursor];
+  const pathPx = pathInches.map((p) => ({ x: p.x * px, y: p.y * px }));
 
-  const pillSize = measurePill(distanceLabel);
-  const cursorPillX = cursorPx.x - pillSize.width / 2;
-  const cursorPillY = cursorPx.y - CURSOR_PILL_OFFSET_ABOVE_DOT - pillSize.height;
+  const flatLinePoints = pathPx.flatMap((p) => [p.x, p.y]);
+
+  let cumulativeInches = 0;
+  for (let i = 1; i < pathInches.length; i++) {
+    const a = pathInches[i - 1]!;
+    const b = pathInches[i]!;
+    cumulativeInches += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  const totalLabel = `${cumulativeInches.toFixed(1)}"`;
+  const totalPillSize = measurePill(totalLabel);
+
+  // Cursor pill: always above the live unit symbol, regardless of direction.
+  const cursorPx = pathPx[pathPx.length - 1]!;
+  const cursorPillX = cursorPx.x - totalPillSize.width / 2;
+  const cursorPillY = cursorPx.y - CURSOR_PILL_OFFSET_ABOVE_DOT - totalPillSize.height;
+
+  const showSegmentPills = waypoints.length > 0;
 
   return (
     <Group>
       <Line
-        points={[originPx.x, originPx.y, cursorPx.x, cursorPx.y]}
+        points={flatLinePoints}
         stroke={teamColor}
         strokeWidth={LINE_WIDTH}
         dash={DASH_PATTERN}
       />
+
+      {/* Waypoint markers — small filled dots at each intermediate waypoint */}
+      {waypoints.map((w, i) => (
+        <Circle
+          key={i}
+          x={w.x * px}
+          y={w.y * px}
+          radius={WAYPOINT_MARKER_RADIUS}
+          fill={teamColor}
+        />
+      ))}
+
+      {/* Per-segment pills (only when there are waypoints — see §2.5 Display 2) */}
+      {showSegmentPills &&
+        pathPx.slice(0, -1).map((from, i) => {
+          const to = pathPx[i + 1]!;
+          const segPxLength = Math.hypot(to.x - from.x, to.y - from.y);
+          if (segPxLength < PER_SEGMENT_PILL_MIN_PX) return null;
+          const a = pathInches[i]!;
+          const b = pathInches[i + 1]!;
+          const segLabel = `${Math.hypot(b.x - a.x, b.y - a.y).toFixed(1)}"`;
+          const segPillSize = measurePill(segLabel);
+          return (
+            <DistanceLabel
+              key={i}
+              x={(from.x + to.x) / 2 - segPillSize.width / 2}
+              y={(from.y + to.y) / 2 - segPillSize.height / 2}
+              width={segPillSize.width}
+              height={segPillSize.height}
+              text={segLabel}
+              color={teamColor}
+            />
+          );
+        })}
+
       <UnitToken
         unit={unit}
         pixelsPerInch={px}
         perspectiveTeamId={perspectiveTeamId}
         positionOverride={cursor}
       />
+
       <DistanceLabel
         x={cursorPillX}
         y={cursorPillY}
-        width={pillSize.width}
-        height={pillSize.height}
-        text={distanceLabel}
+        width={totalPillSize.width}
+        height={totalPillSize.height}
+        text={totalLabel}
         color={teamColor}
       />
     </Group>
@@ -93,8 +158,8 @@ interface DistanceLabelProps {
 
 /**
  * Small distance "pill": white-filled rounded rect with a team-color border
- * and team-color text. Used for both displays in §2.5. The opaque white fill
- * is what makes the per-segment pill "interrupt" the dashed line beneath it.
+ * and team-color text. The opaque white fill is what makes a per-segment
+ * pill "interrupt" the dashed line beneath it.
  */
 function DistanceLabel({ x, y, width, height, text, color }: DistanceLabelProps) {
   return (

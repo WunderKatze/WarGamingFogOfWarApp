@@ -1,9 +1,12 @@
 # Feature: Movement Preview, Waypoints, and Undo
 
-**Status:** Approved
+**Status:** Complete
 **Target Version:** v1
 **Owner:** Ryan
 **Last Updated:** 2026-05-11
+**Completed:** 2026-05-11
+
+> Feature docs are frozen once Complete. For a future refactor or revision, write a new feature doc rather than editing this one — the historical doc remains a snapshot of why the feature was built this way at the time.
 
 ---
 

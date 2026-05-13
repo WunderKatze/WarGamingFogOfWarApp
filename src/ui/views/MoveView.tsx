@@ -34,7 +34,13 @@ interface ActiveMove {
 
 export function MoveView() {
   const { game, dispatch } = useGameContext();
-  const { selectedUnitId, setSelectedUnitId, setHoveredUnitId, setCursorOnMap } = useSelectionContext();
+  const {
+    selectedUnitId,
+    setSelectedUnitId,
+    setHoveredUnitId,
+    setCursorOnMap,
+    setPreviewPositionOverride,
+  } = useSelectionContext();
   const active = game.state.getActivePlayer();
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -62,7 +68,10 @@ export function MoveView() {
 
   const handleUnitClick = (unit: Unit) => {
     if (unit.teamId !== active) {
-      // Enemy click toggles info-menu selection only — no movement.
+      // Enemy click toggles info-menu selection only — no movement. If there
+      // was an active move on an own unit, switching focus to an enemy also
+      // cancels it (same rule as switching focus to a different own unit).
+      if (activeMove) setActiveMove(null);
       setSelectedUnitId(selectedUnitId === unit.id ? undefined : unit.id);
       return;
     }
@@ -102,6 +111,17 @@ export function MoveView() {
     if (!activeMove) return;
     setActiveMove({ ...activeMove, cursor: position });
   };
+
+  // Publish the live active-move cursor into the selection context so the
+  // info menu can use it for position-derived fields (e.g. stealth modifier
+  // at the previewed location) instead of the unit's stored position.
+  useEffect(() => {
+    if (!activeMove) {
+      setPreviewPositionOverride(undefined);
+      return;
+    }
+    setPreviewPositionOverride({ unitId: activeMove.unitId, position: activeMove.cursor });
+  }, [activeMove, setPreviewPositionOverride]);
 
   const undoLastMove = () => {
     dispatch((g) => g.undoLastMove());

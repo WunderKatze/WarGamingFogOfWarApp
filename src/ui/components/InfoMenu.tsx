@@ -27,7 +27,7 @@ const SYMBOL_SIZE = 26;
  */
 export function InfoMenu() {
   const { game, dispatch } = useGameContext();
-  const { selectedUnitId, hoveredUnitId, cursorOnMap } = useSelectionContext();
+  const { selectedUnitId, hoveredUnitId, cursorOnMap, previewPositionOverride } = useSelectionContext();
   const active = game.state.getActivePlayer();
 
   // The Transition screen is a full-bleed "next player, get ready" view that
@@ -39,11 +39,20 @@ export function InfoMenu() {
   const displayUnit = lockedUnit ?? hoveredUnit;
   const isLocked = lockedUnit !== undefined;
 
+  // During an active move the panel-locked unit's *previewed* position
+  // (live cursor) is used in place of its committed position, so the
+  // stealth modifier line tracks the preview.
+  const displayPosition =
+    displayUnit && previewPositionOverride?.unitId === displayUnit.id
+      ? previewPositionOverride.position
+      : displayUnit?.getPosition();
+
   return (
     <div style={panelStyle}>
-      {displayUnit ? (
+      {displayUnit && displayPosition ? (
         <UnitDisplay
           unit={displayUnit}
+          position={displayPosition}
           isLocked={isLocked}
           perspectiveTeamId={active}
           game={game}
@@ -60,13 +69,15 @@ export function InfoMenu() {
 
 interface UnitDisplayProps {
   unit: Unit;
+  /** Position to display and to use for position-derived fields like terrain stealth. */
+  position: Point;
   isLocked: boolean;
   perspectiveTeamId: TeamId;
   game: Game;
   dispatch: Dispatch;
 }
 
-function UnitDisplay({ unit, isLocked, perspectiveTeamId, game, dispatch }: UnitDisplayProps) {
+function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispatch }: UnitDisplayProps) {
   const isFriendly = unit.teamId === perspectiveTeamId;
   const teamColor = isFriendly ? theme.colors.friendly : theme.colors.hostile;
   const revealed = game.state.visionState.revealed.has(unit.id);
@@ -75,8 +86,8 @@ function UnitDisplay({ unit, isLocked, perspectiveTeamId, game, dispatch }: Unit
     ? revealed ? "Revealed" : "Not revealed"
     : revealed ? "Revealed" : "Detected";
 
-  const stealth = getStealthAtPosition(unit, unit.getPosition(), game.state.map);
-  const pos = unit.getPosition();
+  const stealth = getStealthAtPosition(unit, position, game.state.map);
+  const pos = position;
 
   return (
     <div style={unitDisplayStyle}>

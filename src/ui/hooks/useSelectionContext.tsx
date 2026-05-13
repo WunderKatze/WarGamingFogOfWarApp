@@ -1,5 +1,6 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { UnitId } from "../../core/types.js";
+import { useGameContext } from "./useGameContext.js";
 
 interface SelectionContextValue {
   /** The unit currently locked into the info menu and ringed on the map. */
@@ -16,9 +17,20 @@ interface SelectionContextValue {
 const SelectionContext = createContext<SelectionContextValue | null>(null);
 
 export function SelectionProvider({ children }: { children: ReactNode }) {
+  const { game } = useGameContext();
   const [selectedUnitId, setSelectedUnitId] = useState<UnitId | undefined>(undefined);
   const [hoveredUnitId, setHoveredUnitId] = useState<UnitId | undefined>(undefined);
   const [cursorOnMap, setCursorOnMap] = useState(false);
+
+  // Selection belongs to the *active player's* perspective. When the active
+  // player changes — i.e. on a turn flip via the Transition screen — drop
+  // any prior selection / hover so the next player doesn't see info-menu
+  // leakage from the previous player's units.
+  const activePlayerIndex = game.state.activePlayerIndex;
+  useEffect(() => {
+    setSelectedUnitId(undefined);
+    setHoveredUnitId(undefined);
+  }, [activePlayerIndex]);
 
   const value = useMemo<SelectionContextValue>(
     () => ({

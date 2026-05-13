@@ -2,9 +2,10 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import ms from "milsymbol";
 import { useMemo } from "react";
 import { Circle, Group, Image as KonvaImage, Line, Text } from "react-konva";
-import type { Point, TeamId, UnitSize, UnitType } from "../../core/types.js";
+import type { Point, TeamId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { theme } from "../theme.js";
+import { buildSidc } from "./sidc.js";
 
 const SYMBOL_SIZE_PX = 18;
 const NAME_TAG_WIDTH = 80;
@@ -18,36 +19,6 @@ const STEM_LENGTH = 10;
 const GAP_SYMBOL_TO_NAME = 2;
 const GAP_NAME_TO_STEM = 2;
 const GAP_STEM_TO_DOT = POSITION_DOT_RADIUS + 1;
-
-const ECHELON_CODE: Record<UnitSize, string> = {
-  Squad: "B",
-  Platoon: "D",
-  Company: "E",
-  Battalion: "F",
-};
-
-const FUNCTION_CODE: Record<UnitType, string> = {
-  Infantry: "UCI",
-  Tank: "UCA",
-};
-
-/**
- * Builds a NATO APP-6 / MIL-STD-2525B SIDC string for milsymbol.
- *
- * Layout (15 chars, 1-indexed):
- *   1  Scheme       — `S` (warfighting)
- *   2  Affiliation  — `F` (friend) or `H` (hostile) per perspective
- *   3  Dimension    — `G` (ground)
- *   4  Status       — `P` (present)
- *   5-10 Function   — `UCI---` (infantry) / `UCA---` (armor)
- *   11   Mobility   — `-`
- *   12   Echelon    — `B`/`D`/`E`/`F` from size
- *   13-15 Country/OB — `---`
- */
-function buildSidc(unit: Unit, perspectiveTeamId: TeamId): string {
-  const affiliation = unit.teamId === perspectiveTeamId ? "F" : "H";
-  return `S${affiliation}GP${FUNCTION_CODE[unit.type]}----${ECHELON_CODE[unit.size]}---`;
-}
 
 interface Props {
   unit: Unit;
@@ -172,10 +143,10 @@ export function UnitToken({
         />
       )}
 
-      {/* Decoration rings encircle the symbol, not the dot. The revealed ring
-          is the widest decoration and extends well beyond the symbol — it's
-          purely a status indicator and always non-listening so it never
-          obstructs clicks on adjacent units. */}
+      {/* Decoration rings encircle the symbol, not the dot. All three rings
+          are pure status indicators and non-listening — they never obstruct
+          clicks on adjacent units, even when one of them happens to overlap
+          a neighbouring unit's symbol. */}
       {revealed && (
         <Circle
           y={symbolCenterY}
@@ -193,7 +164,7 @@ export function UnitToken({
           radius={ringRadius + 2}
           stroke={theme.colors.firedRing}
           strokeWidth={2.5}
-          listening={decorativeListening}
+          listening={false}
         />
       )}
       {selected && (
@@ -203,7 +174,7 @@ export function UnitToken({
           stroke={dotColor}
           strokeWidth={2.5}
           dash={[4, 3]}
-          listening={decorativeListening}
+          listening={false}
         />
       )}
 

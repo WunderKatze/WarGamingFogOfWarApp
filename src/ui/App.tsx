@@ -1,6 +1,7 @@
 import { GameMap } from "../core/map/GameMap.js";
 import { TerrainPolygon } from "../core/map/TerrainPolygon.js";
 import { TerrainWall } from "../core/map/TerrainWall.js";
+import { InfoMenu } from "./components/InfoMenu.js";
 import { useGame } from "./hooks/useGame.js";
 import { GameProvider, useGameContext } from "./hooks/useGameContext.js";
 import { SelectionProvider } from "./hooks/useSelectionContext.js";
@@ -63,6 +64,7 @@ export function App() {
       <SelectionProvider>
         <Header />
         <PhaseRouter />
+        <InfoMenu />
         <RestartButton />
       </SelectionProvider>
     </GameProvider>

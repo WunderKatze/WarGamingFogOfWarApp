@@ -17,7 +17,6 @@ export const theme = {
     subtleBorder: "#eee",
     primary: "#2b6cb0",
     secondary: "#888",
-    selectionRing: "#1f77ff",
     firedRing: "#ff8a00",
     revealedRing: "#222",
     /** Position-dot color for friendly-affiliation units (NATO blue). */

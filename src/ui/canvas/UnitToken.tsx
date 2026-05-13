@@ -200,7 +200,7 @@ export function UnitToken({
         <Circle
           y={symbolCenterY}
           radius={ringRadius}
-          stroke={theme.colors.selectionRing}
+          stroke={dotColor}
           strokeWidth={2.5}
           dash={[4, 3]}
           listening={decorativeListening}

@@ -168,14 +168,14 @@ export function MoveView() {
                 Pos ({selected.getPosition().x.toFixed(1)}, {selected.getPosition().y.toFixed(1)})
               </div>
               {selected instanceof Infantry && (
-                <div style={{ marginTop: 8 }}>
-                  <SidebarButton
-                    variant="secondary"
-                    onClick={() => dispatch((g) => g.toggleDugIn(selected.id))}
-                  >
-                    {selected.dugIn ? "Stand up" : "Dig in"}
-                  </SidebarButton>
-                </div>
+                <label style={dugInCheckboxStyle}>
+                  <input
+                    type="checkbox"
+                    checked={selected.dugIn}
+                    onChange={() => dispatch((g) => g.toggleDugIn(selected.id))}
+                  />
+                  Dug-In
+                </label>
               )}
               {game.state.moveHistory.some((e) => e.unitId === selected.id) && (
                 <div style={{ marginTop: 8 }}>
@@ -285,6 +285,16 @@ const listItemStyle: React.CSSProperties = {
 };
 
 const waypointToggleStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 12,
+  marginTop: 8,
+  cursor: "pointer",
+  userSelect: "none",
+};
+
+const dugInCheckboxStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 6,

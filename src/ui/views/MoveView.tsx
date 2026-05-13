@@ -7,6 +7,7 @@ import { MapCanvas } from "../canvas/MapCanvas.js";
 import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
 import { useGameContext } from "../hooks/useGameContext.js";
+import { useSelectionContext } from "../hooks/useSelectionContext.js";
 
 function getVisibleUnits(game: Game): Unit[] {
   const active = game.state.getActivePlayer();
@@ -34,14 +35,14 @@ interface ActiveMove {
 
 export function MoveView() {
   const { game, dispatch } = useGameContext();
+  const { selectedUnitId, setSelectedUnitId } = useSelectionContext();
   const active = game.state.getActivePlayer();
-  const [selectedId, setSelectedId] = useState<UnitId | undefined>(undefined);
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null);
   const [shiftHeld, setShiftHeld] = useState(false);
   const [waypointToggle, setWaypointToggle] = useState(false);
 
   const visible = getVisibleUnits(game);
-  const effectiveSelectedId = activeMove?.unitId ?? selectedId;
+  const effectiveSelectedId = activeMove?.unitId ?? selectedUnitId;
   const selected = effectiveSelectedId ? game.state.getUnitById(effectiveSelectedId) : undefined;
   const canUndo = game.state.moveHistory.length > 0;
   const waypointModeActive = shiftHeld || waypointToggle;
@@ -49,7 +50,7 @@ export function MoveView() {
   const startActiveMove = (unit: Unit) => {
     const origin = unit.getPosition();
     setActiveMove({ unitId: unit.id, origin, waypoints: [], cursor: origin });
-    setSelectedId(unit.id);
+    setSelectedUnitId(unit.id);
   };
 
   const cancelActiveMove = () => {
@@ -99,7 +100,7 @@ export function MoveView() {
   const endMove = () => {
     // Active move is implicitly cancelled (no commit) per §4.
     setActiveMove(null);
-    setSelectedId(undefined);
+    setSelectedUnitId(undefined);
     dispatch((g) => g.endMove());
   };
 

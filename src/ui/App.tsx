@@ -3,6 +3,7 @@ import { TerrainPolygon } from "../core/map/TerrainPolygon.js";
 import { TerrainWall } from "../core/map/TerrainWall.js";
 import { useGame } from "./hooks/useGame.js";
 import { GameProvider, useGameContext } from "./hooks/useGameContext.js";
+import { SelectionProvider } from "./hooks/useSelectionContext.js";
 import { theme } from "./theme.js";
 import { DeploymentView } from "./views/DeploymentView.js";
 import { FireDeclareView } from "./views/FireDeclareView.js";
@@ -59,9 +60,11 @@ export function App() {
 
   return (
     <GameProvider value={{ game, dispatch, reset }}>
-      <Header />
-      <PhaseRouter />
-      <RestartButton />
+      <SelectionProvider>
+        <Header />
+        <PhaseRouter />
+        <RestartButton />
+      </SelectionProvider>
     </GameProvider>
   );
 }

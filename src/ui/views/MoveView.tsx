@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Game } from "../../core/Game.js";
 import type { Point, UnitId } from "../../core/types.js";
-import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
@@ -155,30 +154,11 @@ export function MoveView() {
   return (
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <Sidebar>
-        <SidebarSection title="Selected">
+        <SidebarSection title="Move actions">
           {selected ? (
             <div style={{ fontSize: 13 }}>
-              <div><strong>{selected.name}</strong></div>
-              <div style={{ opacity: 0.7, fontSize: 12 }}>
-                {selected.type}, {selected.size}
-                {selected.hasModifier("Recon") ? " (Recon)" : ""}
-                {selected instanceof Infantry && selected.dugIn ? ", dug-in" : ""}
-              </div>
-              <div style={{ opacity: 0.7, fontSize: 12, marginTop: 4 }}>
-                Pos ({selected.getPosition().x.toFixed(1)}, {selected.getPosition().y.toFixed(1)})
-              </div>
-              {selected instanceof Infantry && (
-                <label style={dugInCheckboxStyle}>
-                  <input
-                    type="checkbox"
-                    checked={selected.dugIn}
-                    onChange={() => dispatch((g) => g.toggleDugIn(selected.id))}
-                  />
-                  Dug-In
-                </label>
-              )}
               {game.state.moveHistory.some((e) => e.unitId === selected.id) && (
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginBottom: 8 }}>
                   <SidebarButton
                     variant="secondary"
                     onClick={() => dispatch((g) => g.revertUnitMoves(selected.id))}
@@ -294,12 +274,3 @@ const waypointToggleStyle: React.CSSProperties = {
   userSelect: "none",
 };
 
-const dugInCheckboxStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  fontSize: 12,
-  marginTop: 8,
-  cursor: "pointer",
-  userSelect: "none",
-};

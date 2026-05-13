@@ -1,13 +1,16 @@
 import { useState } from "react";
 import type { Point, UnitSize, UnitType } from "../../core/types.js";
+import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
 import { useGameContext } from "../hooks/useGameContext.js";
+import { useSelectionContext } from "../hooks/useSelectionContext.js";
 
 const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battalion"];
 
 export function DeploymentView() {
   const { game, dispatch } = useGameContext();
+  const { selectedUnitId, setSelectedUnitId, setHoveredUnitId, setCursorOnMap } = useSelectionContext();
   const activePlayer = game.state.getActivePlayer();
   const ownUnits = game.state.units.filter((u) => u.teamId === activePlayer);
 
@@ -30,6 +33,12 @@ export function DeploymentView() {
         ...(penType === "Infantry" && { dugIn: penDugIn }),
       }),
     );
+    // Placement also clicks the empty map → clear selection.
+    setSelectedUnitId(undefined);
+  };
+
+  const handleUnitClick = (unit: Unit) => {
+    setSelectedUnitId(selectedUnitId === unit.id ? undefined : unit.id);
   };
 
   return (
@@ -102,6 +111,10 @@ export function DeploymentView() {
           map={game.state.map}
           units={ownUnits}
           perspectiveTeamId={activePlayer}
+          selectedUnitId={selectedUnitId}
+          onUnitClick={handleUnitClick}
+          onUnitHover={(u) => setHoveredUnitId(u?.id)}
+          onCursorOnMapChange={setCursorOnMap}
           onMapClick={handlePlace}
         />
       </main>

@@ -74,6 +74,9 @@ interface Props {
    */
   easySelect?: boolean;
   onClick?: () => void;
+  /** Fired on Konva mouse enter / leave on the token. */
+  onHoverEnter?: () => void;
+  onHoverLeave?: () => void;
 }
 
 /**
@@ -98,6 +101,8 @@ export function UnitToken({
   ghosted = false,
   easySelect = true,
   onClick,
+  onHoverEnter,
+  onHoverLeave,
 }: Props) {
   const pos = positionOverride ?? unit.getPosition();
   const x = pos.x * pixelsPerInch;
@@ -139,6 +144,14 @@ export function UnitToken({
   // either mode without double-firing the Group handler.
   const groupHandlers = easySelect ? { onClick: handleClick, onTap: handleClick } : {};
   const decorativeListening = easySelect;
+  // Hover is independent of select mode: in strict (active-move) mode only the
+  // dot listens, so hover fires when the cursor crosses the dot. That's
+  // acceptable because during an active move the info menu is locked to the
+  // moving unit anyway and hover is decorative.
+  const hoverHandlers = {
+    ...(onHoverEnter && { onMouseEnter: () => onHoverEnter() }),
+    ...(onHoverLeave && { onMouseLeave: () => onHoverLeave() }),
+  };
 
   return (
     <Group
@@ -146,6 +159,7 @@ export function UnitToken({
       y={y}
       opacity={ghosted ? 0.3 : 1}
       {...groupHandlers}
+      {...hoverHandlers}
     >
       {/* Stem line — back layer so symbol & dot draw over it */}
       {stemTopY < stemBottomY && (

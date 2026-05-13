@@ -35,7 +35,7 @@ interface ActiveMove {
 
 export function MoveView() {
   const { game, dispatch } = useGameContext();
-  const { selectedUnitId, setSelectedUnitId } = useSelectionContext();
+  const { selectedUnitId, setSelectedUnitId, setHoveredUnitId, setCursorOnMap } = useSelectionContext();
   const active = game.state.getActivePlayer();
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -55,15 +55,21 @@ export function MoveView() {
 
   const cancelActiveMove = () => {
     setActiveMove(null);
+    setSelectedUnitId(undefined);
     // The sidebar toggle is sticky across moves; only Shift state is keyboard-
     // driven. Don't auto-reset waypointToggle here — the player may want it on
     // for the next move too.
   };
 
   const handleUnitClick = (unit: Unit) => {
-    if (unit.teamId !== active) return; // enemy clicks are a no-op for now
+    if (unit.teamId !== active) {
+      // Enemy click toggles info-menu selection only — no movement.
+      setSelectedUnitId(selectedUnitId === unit.id ? undefined : unit.id);
+      return;
+    }
     if (activeMove && activeMove.unitId === unit.id) {
-      // Clicking the ghost cancels the active move (per §2.4).
+      // Clicking the unit that's mid-move cancels the move (per §2.4) AND
+      // clears the info-menu selection.
       cancelActiveMove();
       return;
     }
@@ -73,7 +79,11 @@ export function MoveView() {
   };
 
   const handleMapClick = (position: Point) => {
-    if (!activeMove) return;
+    if (!activeMove) {
+      // No active move: empty-map click clears info-menu selection.
+      setSelectedUnitId(undefined);
+      return;
+    }
     if (waypointModeActive) {
       // Add a waypoint and stay in active-move mode. Future clicks may add
       // more waypoints, or commit once the player drops waypoint mode.
@@ -86,6 +96,7 @@ export function MoveView() {
     const { unitId } = activeMove;
     dispatch((g) => g.moveUnit(unitId, position));
     setActiveMove(null);
+    setSelectedUnitId(undefined);
   };
 
   const handlePointerMove = (position: Point) => {
@@ -112,6 +123,7 @@ export function MoveView() {
       }
       if (e.key === "Escape") {
         setActiveMove(null);
+        setSelectedUnitId(undefined);
         return;
       }
       // Ctrl+Z / Cmd+Z = undo. Shift+Ctrl+Z is conventionally redo — ignore it.
@@ -236,6 +248,8 @@ export function MoveView() {
           ghostUnitId={activeMove?.unitId}
           strictUnitSelect={!!activeMove}
           onUnitClick={handleUnitClick}
+          onUnitHover={(u) => setHoveredUnitId(u?.id)}
+          onCursorOnMapChange={setCursorOnMap}
           onMapClick={handleMapClick}
           onMapPointerMove={handlePointerMove}
           draggable={!activeMove}

@@ -4,6 +4,7 @@ import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
 import { useGameContext } from "../hooks/useGameContext.js";
+import { useSelectionContext } from "../hooks/useSelectionContext.js";
 
 function getVisibleUnits(game: Game): Unit[] {
   const active = game.state.getActivePlayer();
@@ -15,13 +16,22 @@ function getVisibleUnits(game: Game): Unit[] {
 
 export function FireDeclareView() {
   const { game, dispatch } = useGameContext();
+  const { selectedUnitId, setSelectedUnitId, setHoveredUnitId, setCursorOnMap } = useSelectionContext();
   const active = game.state.getActivePlayer();
   const visible = getVisibleUnits(game);
   const fired = game.state.firedThisTurn;
 
   const handleUnitClick = (unit: Unit) => {
-    if (unit.teamId !== active) return;
-    dispatch((g) => g.toggleFire(unit.id));
+    // Selection toggles on every visible unit, own or enemy.
+    setSelectedUnitId(selectedUnitId === unit.id ? undefined : unit.id);
+    // Own-unit click additionally toggles fire-declaration for the turn.
+    if (unit.teamId === active) {
+      dispatch((g) => g.toggleFire(unit.id));
+    }
+  };
+
+  const handleMapClick = () => {
+    setSelectedUnitId(undefined);
   };
 
   return (
@@ -59,9 +69,13 @@ export function FireDeclareView() {
           map={game.state.map}
           units={visible}
           perspectiveTeamId={active}
+          selectedUnitId={selectedUnitId}
           firedUnitIds={fired}
           revealedUnitIds={game.state.visionState.revealed}
           onUnitClick={handleUnitClick}
+          onUnitHover={(u) => setHoveredUnitId(u?.id)}
+          onCursorOnMapChange={setCursorOnMap}
+          onMapClick={handleMapClick}
         />
       </main>
     </div>

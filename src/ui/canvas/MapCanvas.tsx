@@ -30,6 +30,10 @@ interface Props {
    */
   strictUnitSelect?: boolean;
   onUnitClick?: ((unit: Unit) => void) | undefined;
+  /** Called when the cursor enters / leaves a unit token. `null` means it left the previous unit. */
+  onUnitHover?: ((unit: Unit | null) => void) | undefined;
+  /** Called when the cursor enters / leaves the canvas container as a whole. */
+  onCursorOnMapChange?: ((on: boolean) => void) | undefined;
   /** Called with map-space (inch) position when the user clicks empty space or terrain. */
   onMapClick?: ((position: Point) => void) | undefined;
   /** Called continuously with map-space (inch) coords as the pointer moves over the stage. */
@@ -61,6 +65,8 @@ export function MapCanvas({
   ghostUnitId,
   strictUnitSelect = false,
   onUnitClick,
+  onUnitHover,
+  onCursorOnMapChange,
   onMapClick,
   onMapPointerMove,
   overlay,
@@ -128,7 +134,12 @@ export function MapCanvas({
   };
 
   return (
-    <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
+    <div
+      ref={containerRef}
+      style={{ width: "100%", height: "100%", position: "relative" }}
+      onMouseEnter={onCursorOnMapChange ? () => onCursorOnMapChange(true) : undefined}
+      onMouseLeave={onCursorOnMapChange ? () => onCursorOnMapChange(false) : undefined}
+    >
       {size.width > 0 && (
         <>
           <Stage
@@ -176,6 +187,8 @@ export function MapCanvas({
                   ghosted={u.id === ghostUnitId}
                   easySelect={!strictUnitSelect}
                   onClick={() => onUnitClick?.(u)}
+                  onHoverEnter={() => onUnitHover?.(u)}
+                  onHoverLeave={() => onUnitHover?.(null)}
                 />
               ))}
             </Layer>

@@ -38,6 +38,7 @@ export function MoveView() {
     selectedUnitId,
     setSelectedUnitId,
     setHoveredUnitId,
+    setHoveredTerrainHit,
     setCursorOnMap,
     setPreviewPositionOverride,
   } = useSelectionContext();
@@ -249,6 +250,7 @@ export function MoveView() {
           strictUnitSelect={!!activeMove}
           onUnitClick={handleUnitClick}
           onUnitHover={(u) => setHoveredUnitId(u?.id)}
+          onHoveredTerrainChange={setHoveredTerrainHit}
           onCursorOnMapChange={setCursorOnMap}
           onMapClick={handleMapClick}
           onMapPointerMove={handlePointerMove}

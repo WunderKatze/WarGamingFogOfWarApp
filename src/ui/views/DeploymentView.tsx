@@ -10,7 +10,13 @@ const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battali
 
 export function DeploymentView() {
   const { game, dispatch } = useGameContext();
-  const { selectedUnitId, setSelectedUnitId, setHoveredUnitId, setCursorOnMap } = useSelectionContext();
+  const {
+    selectedUnitId,
+    setSelectedUnitId,
+    setHoveredUnitId,
+    setHoveredTerrainHit,
+    setCursorOnMap,
+  } = useSelectionContext();
   const activePlayer = game.state.getActivePlayer();
   const ownUnits = game.state.units.filter((u) => u.teamId === activePlayer);
 
@@ -114,6 +120,7 @@ export function DeploymentView() {
           selectedUnitId={selectedUnitId}
           onUnitClick={handleUnitClick}
           onUnitHover={(u) => setHoveredUnitId(u?.id)}
+          onHoveredTerrainChange={setHoveredTerrainHit}
           onCursorOnMapChange={setCursorOnMap}
           onMapClick={handlePlace}
         />

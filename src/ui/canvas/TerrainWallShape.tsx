@@ -5,12 +5,25 @@ import { wallTerrainCatalog } from "../../core/map/terrainCatalog.js";
 interface Props {
   wall: TerrainWall;
   pixelsPerInch: number;
+  onHoverEnter?: (() => void) | undefined;
+  onHoverLeave?: (() => void) | undefined;
 }
 
-export function TerrainWallShape({ wall, pixelsPerInch }: Props) {
+/**
+ * Terrain wall. Same hover-listens-but-clicks-pass-through model as
+ * TerrainPolygonShape: the rendered stroke is the hit zone, no JS
+ * proximity test needed. Konva's hit-test on a stroked Line uses the
+ * actual stroke width.
+ */
+export function TerrainWallShape({ wall, pixelsPerInch, onHoverEnter, onHoverLeave }: Props) {
   const { visual } = wallTerrainCatalog[wall.wallType];
+  const hoverHandlers = {
+    ...(onHoverEnter && { onMouseEnter: () => onHoverEnter() }),
+    ...(onHoverLeave && { onMouseLeave: () => onHoverLeave() }),
+  };
   return (
     <Line
+      name="terrain-wall"
       points={[
         wall.from.x * pixelsPerInch,
         wall.from.y * pixelsPerInch,
@@ -20,7 +33,7 @@ export function TerrainWallShape({ wall, pixelsPerInch }: Props) {
       stroke={visual.stroke}
       strokeWidth={visual.strokeWidth}
       lineCap="round"
-      listening={false}
+      {...hoverHandlers}
     />
   );
 }

@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { TerrainPolygon } from "../../core/map/TerrainPolygon.js";
+import type { TerrainWall } from "../../core/map/TerrainWall.js";
 import type { Point, UnitId } from "../../core/types.js";
 import { useGameContext } from "./useGameContext.js";
 
@@ -13,6 +15,17 @@ export interface PreviewPositionOverride {
   position: Point;
 }
 
+/**
+ * The terrain feature currently under the cursor — emitted by Konva hover
+ * events on the rendered TerrainPolygonShape / TerrainWallShape. If the
+ * cursor is over the map background with no terrain underneath, this is
+ * undefined; combine with `cursorOnMap` to distinguish "open ground" from
+ * "cursor off-map entirely."
+ */
+export type TerrainHit =
+  | { kind: "polygon"; polygon: TerrainPolygon }
+  | { kind: "wall"; wall: TerrainWall };
+
 interface SelectionContextValue {
   /** The unit currently locked into the info menu and ringed on the map. */
   selectedUnitId: UnitId | undefined;
@@ -23,6 +36,13 @@ interface SelectionContextValue {
   /** True iff the cursor is over the map canvas (used for the info-menu idle string). */
   cursorOnMap: boolean;
   setCursorOnMap(on: boolean): void;
+  /**
+   * The polygon or wall the cursor is currently over. Undefined when the
+   * cursor is on open ground or off-map. Driven by Konva mouseEnter/Leave
+   * on the rendered terrain shapes — no JS hit-testing.
+   */
+  hoveredTerrainHit: TerrainHit | undefined;
+  setHoveredTerrainHit(hit: TerrainHit | undefined): void;
   /**
    * When set, the info menu displays this position (and any position-derived
    * fields like terrain stealth) for the given unit instead of the unit's
@@ -39,6 +59,7 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
   const [selectedUnitId, setSelectedUnitId] = useState<UnitId | undefined>(undefined);
   const [hoveredUnitId, setHoveredUnitId] = useState<UnitId | undefined>(undefined);
   const [cursorOnMap, setCursorOnMap] = useState(false);
+  const [hoveredTerrainHit, setHoveredTerrainHit] = useState<TerrainHit | undefined>(undefined);
   const [previewPositionOverride, setPreviewPositionOverride] = useState<PreviewPositionOverride | undefined>(undefined);
 
   // Selection belongs to the *active player's* perspective. When the active
@@ -49,7 +70,13 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setSelectedUnitId(undefined);
     setHoveredUnitId(undefined);
+    setHoveredTerrainHit(undefined);
   }, [activePlayerIndex]);
+
+  // Cursor leaving the canvas implies there's nothing under it.
+  useEffect(() => {
+    if (!cursorOnMap) setHoveredTerrainHit(undefined);
+  }, [cursorOnMap]);
 
   // Escape clears the info-menu selection regardless of phase. Phase views
   // can still layer their own Escape behavior (e.g. MoveView cancels an
@@ -75,10 +102,12 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
       setHoveredUnitId,
       cursorOnMap,
       setCursorOnMap,
+      hoveredTerrainHit,
+      setHoveredTerrainHit,
       previewPositionOverride,
       setPreviewPositionOverride,
     }),
-    [selectedUnitId, hoveredUnitId, cursorOnMap, previewPositionOverride],
+    [selectedUnitId, hoveredUnitId, cursorOnMap, hoveredTerrainHit, previewPositionOverride],
   );
 
   return <SelectionContext.Provider value={value}>{children}</SelectionContext.Provider>;

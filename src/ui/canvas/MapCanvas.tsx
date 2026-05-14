@@ -4,11 +4,20 @@ import { Layer, Rect, Stage } from "react-konva";
 import type { GameMap } from "../../core/map/GameMap.js";
 import type { Point, TeamId, UnitId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
+import type { TerrainHit } from "../hooks/useSelectionContext.js";
 import { theme } from "../theme.js";
 import { ScaleIndicator } from "./ScaleIndicator.js";
 import { TerrainPolygonShape } from "./TerrainPolygonShape.js";
 import { TerrainWallShape } from "./TerrainWallShape.js";
 import { UnitToken } from "./UnitToken.js";
+
+/**
+ * Stage-click `target.name()` values treated as "click on empty map" rather
+ * than as a hit on an interactive object. The map background is the obvious
+ * one; terrain shapes now listen for hover, so clicks land on them too —
+ * but a click on terrain should still mean "click on the map underneath."
+ */
+const MAP_CLICK_TARGETS = new Set(["map-background", "terrain-polygon", "terrain-wall"]);
 
 const ZOOM_STEP = 1.1;
 const MIN_SCALE = 0.25;
@@ -32,6 +41,8 @@ interface Props {
   onUnitClick?: ((unit: Unit) => void) | undefined;
   /** Called when the cursor enters / leaves a unit token. `null` means it left the previous unit. */
   onUnitHover?: ((unit: Unit | null) => void) | undefined;
+  /** Called when the cursor enters / leaves a terrain polygon or wall. */
+  onHoveredTerrainChange?: ((hit: TerrainHit | undefined) => void) | undefined;
   /** Called when the cursor enters / leaves the canvas container as a whole. */
   onCursorOnMapChange?: ((on: boolean) => void) | undefined;
   /** Called with map-space (inch) position when the user clicks empty space or terrain. */
@@ -66,6 +77,7 @@ export function MapCanvas({
   strictUnitSelect = false,
   onUnitClick,
   onUnitHover,
+  onHoveredTerrainChange,
   onCursorOnMapChange,
   onMapClick,
   onMapPointerMove,
@@ -110,9 +122,10 @@ export function MapCanvas({
 
   const handleStageClick = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (!onMapClick) return;
-    // Only fire when the click hit the map-background Rect — terrain has
-    // listening disabled, so terrain clicks fall through to the background.
-    if (e.target.name() !== "map-background") return;
+    // Map clicks come from the map background or from any terrain shape —
+    // terrain listens for hover, so it gets click events too, but
+    // semantically a terrain click is still a click on the map underneath.
+    if (!MAP_CLICK_TARGETS.has(e.target.name())) return;
     const stage = e.target.getStage();
     if (!stage) return;
     const pointer = stage.getPointerPosition();
@@ -168,10 +181,22 @@ export function MapCanvas({
                 strokeWidth={1}
               />
               {map.polygons.map((p) => (
-                <TerrainPolygonShape key={p.id} polygon={p} pixelsPerInch={theme.pixelsPerInch} />
+                <TerrainPolygonShape
+                  key={p.id}
+                  polygon={p}
+                  pixelsPerInch={theme.pixelsPerInch}
+                  onHoverEnter={() => onHoveredTerrainChange?.({ kind: "polygon", polygon: p })}
+                  onHoverLeave={() => onHoveredTerrainChange?.(undefined)}
+                />
               ))}
               {map.walls.map((w) => (
-                <TerrainWallShape key={w.id} wall={w} pixelsPerInch={theme.pixelsPerInch} />
+                <TerrainWallShape
+                  key={w.id}
+                  wall={w}
+                  pixelsPerInch={theme.pixelsPerInch}
+                  onHoverEnter={() => onHoveredTerrainChange?.({ kind: "wall", wall: w })}
+                  onHoverLeave={() => onHoveredTerrainChange?.(undefined)}
+                />
               ))}
             </Layer>
             <Layer listening>

@@ -16,7 +16,13 @@ function getVisibleUnits(game: Game): Unit[] {
 
 export function FireDeclareView() {
   const { game, dispatch } = useGameContext();
-  const { selectedUnitId, setSelectedUnitId, setHoveredUnitId, setCursorOnMap } = useSelectionContext();
+  const {
+    selectedUnitId,
+    setSelectedUnitId,
+    setHoveredUnitId,
+    setHoveredTerrainHit,
+    setCursorOnMap,
+  } = useSelectionContext();
   const active = game.state.getActivePlayer();
   const visible = getVisibleUnits(game);
   const fired = game.state.firedThisTurn;
@@ -74,6 +80,7 @@ export function FireDeclareView() {
           revealedUnitIds={game.state.visionState.revealed}
           onUnitClick={handleUnitClick}
           onUnitHover={(u) => setHoveredUnitId(u?.id)}
+          onHoveredTerrainChange={setHoveredTerrainHit}
           onCursorOnMapChange={setCursorOnMap}
           onMapClick={handleMapClick}
         />

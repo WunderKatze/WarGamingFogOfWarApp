@@ -1,12 +1,6 @@
 import { Line } from "react-konva";
 import type { TerrainPolygon } from "../../core/map/TerrainPolygon.js";
-import type { PolygonTerrainType } from "../../core/types.js";
-
-const TERRAIN_FILL: Record<PolygonTerrainType, string> = {
-  Building: "#9a9a9a",
-  TallWoods: "#2d5e2d",
-  ShortTerrain: "#a8c870",
-};
+import { polygonTerrainCatalog } from "../../core/map/terrainCatalog.js";
 
 interface Props {
   polygon: TerrainPolygon;
@@ -14,6 +8,7 @@ interface Props {
 }
 
 export function TerrainPolygonShape({ polygon, pixelsPerInch }: Props) {
+  const { visual } = polygonTerrainCatalog[polygon.terrainType];
   const points = polygon.vertices.flatMap((v) => [
     v.x * pixelsPerInch,
     v.y * pixelsPerInch,
@@ -22,10 +17,10 @@ export function TerrainPolygonShape({ polygon, pixelsPerInch }: Props) {
     <Line
       points={points}
       closed
-      fill={TERRAIN_FILL[polygon.terrainType]}
-      stroke="#333"
+      fill={visual.fill}
+      stroke={visual.stroke}
       strokeWidth={1}
-      opacity={0.7}
+      opacity={visual.opacity}
       listening={false}
     />
   );

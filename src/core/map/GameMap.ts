@@ -1,13 +1,7 @@
 import {
-  polygonStealthModifier,
-  shortWallStealthModifier,
-  tallWoodsRayThroughLimit,
-} from "../config.js";
-import {
-  segmentEdgeIntersectionCount,
-  segmentIntersection,
-  segmentLengthInsidePolygon,
-} from "./geometry.js";
+  polygonTerrainCatalog,
+  wallTerrainCatalog,
+} from "./terrainCatalog.js";
 import type { TerrainPolygon } from "./TerrainPolygon.js";
 import type { TerrainWall } from "./TerrainWall.js";
 import type { Point } from "../types.js";
@@ -48,22 +42,16 @@ export class GameMap {
   }
 
   /**
-   * True if any sight-blocking rule interrupts a finite ray from `from` to `to`:
-   *   - the ray crosses a Tall wall
-   *   - the ray intersects ≥ 2 edges of any single Building polygon
-   *   - the ray spends more than tallWoodsRayThroughLimit inches inside any TallWoods polygon
+   * True if any terrain blocks the ray from `from` to `to`. Per-kind rules
+   * (Tall walls, Buildings with ≥ 2 edge intersections, Tall Woods with > N″
+   * inside) live in the terrain catalog — see `terrainCatalog.ts`.
    */
   isRayBlocked(from: Point, to: Point): boolean {
     for (const wall of this.walls) {
-      if (wall.wallType !== "Tall") continue;
-      if (segmentIntersection(from, to, wall.from, wall.to) !== null) return true;
+      if (wallTerrainCatalog[wall.wallType].blocksRay(wall, from, to)) return true;
     }
     for (const poly of this.polygons) {
-      if (poly.terrainType === "Building") {
-        if (segmentEdgeIntersectionCount(from, to, poly.vertices) >= 2) return true;
-      } else if (poly.terrainType === "TallWoods") {
-        if (segmentLengthInsidePolygon(from, to, poly.vertices) > tallWoodsRayThroughLimit) return true;
-      }
+      if (polygonTerrainCatalog[poly.terrainType].blocksRay(poly, from, to)) return true;
     }
     return false;
   }
@@ -71,38 +59,23 @@ export class GameMap {
   /**
    * Stealth modifiers from terrain that apply to a target along a ray.
    * Caller pools these with the target unit's getInherentConcealmentModifier()
-   * and takes the single highest — modifiers do not stack.
-   *
-   * Building stealth applies only when the target is INSIDE the building.
-   * Tall woods and short terrain apply when the ray passes through any portion of them.
-   * Short walls apply when the ray crosses them. (Tall walls block instead.)
+   * and takes the single highest — modifiers do not stack. Per-kind rules
+   * live in the terrain catalog.
    */
   getConcealmentModifiersAlongRay(from: Point, targetPosition: Point): number[] {
     const mods: number[] = [];
-
     for (const wall of this.walls) {
-      if (wall.wallType !== "Short") continue;
-      if (segmentIntersection(from, targetPosition, wall.from, wall.to) !== null) {
-        mods.push(shortWallStealthModifier);
+      const entry = wallTerrainCatalog[wall.wallType];
+      if (entry.appliesAsConcealment(wall, from, targetPosition)) {
+        mods.push(entry.stealthMultiplier);
       }
     }
-
     for (const poly of this.polygons) {
-      if (poly.terrainType === "Building") {
-        if (poly.containsPoint(targetPosition)) {
-          mods.push(polygonStealthModifier.Building);
-        }
-      } else if (poly.terrainType === "TallWoods") {
-        if (segmentLengthInsidePolygon(from, targetPosition, poly.vertices) > 0) {
-          mods.push(polygonStealthModifier.TallWoods);
-        }
-      } else if (poly.terrainType === "ShortTerrain") {
-        if (segmentLengthInsidePolygon(from, targetPosition, poly.vertices) > 0) {
-          mods.push(polygonStealthModifier.ShortTerrain);
-        }
+      const entry = polygonTerrainCatalog[poly.terrainType];
+      if (entry.appliesAsConcealment(poly, from, targetPosition)) {
+        mods.push(entry.stealthMultiplier);
       }
     }
-
     return mods;
   }
 }

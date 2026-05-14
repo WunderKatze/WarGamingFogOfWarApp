@@ -1,5 +1,6 @@
 import { Line } from "react-konva";
 import type { TerrainWall } from "../../core/map/TerrainWall.js";
+import { wallTerrainCatalog } from "../../core/map/terrainCatalog.js";
 
 interface Props {
   wall: TerrainWall;
@@ -7,7 +8,7 @@ interface Props {
 }
 
 export function TerrainWallShape({ wall, pixelsPerInch }: Props) {
-  const isTall = wall.wallType === "Tall";
+  const { visual } = wallTerrainCatalog[wall.wallType];
   return (
     <Line
       points={[
@@ -16,8 +17,8 @@ export function TerrainWallShape({ wall, pixelsPerInch }: Props) {
         wall.to.x * pixelsPerInch,
         wall.to.y * pixelsPerInch,
       ]}
-      stroke={isTall ? "#000" : "#777"}
-      strokeWidth={isTall ? 5 : 3}
+      stroke={visual.stroke}
+      strokeWidth={visual.strokeWidth}
       lineCap="round"
       listening={false}
     />

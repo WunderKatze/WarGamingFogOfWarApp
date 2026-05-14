@@ -1,14 +1,18 @@
 import ms from "milsymbol";
 import { useMemo, type CSSProperties } from "react";
-import { dugInStealthModifier, polygonStealthModifier } from "../../core/config.js";
+import { dugInStealthModifier } from "../../core/config.js";
 import type { Game } from "../../core/Game.js";
 import type { GameMap } from "../../core/map/GameMap.js";
+import {
+  polygonTerrainCatalog,
+  wallTerrainCatalog,
+} from "../../core/map/terrainCatalog.js";
 import type { Point, TeamId } from "../../core/types.js";
 import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { buildSidc } from "../canvas/sidc.js";
 import { useGameContext } from "../hooks/useGameContext.js";
-import { useSelectionContext } from "../hooks/useSelectionContext.js";
+import { useSelectionContext, type TerrainHit } from "../hooks/useSelectionContext.js";
 import type { Dispatch } from "../hooks/useGame.js";
 import { theme } from "../theme.js";
 
@@ -27,7 +31,13 @@ const SYMBOL_SIZE = 26;
  */
 export function InfoMenu() {
   const { game, dispatch } = useGameContext();
-  const { selectedUnitId, hoveredUnitId, cursorOnMap, previewPositionOverride } = useSelectionContext();
+  const {
+    selectedUnitId,
+    hoveredUnitId,
+    hoveredTerrainHit,
+    cursorOnMap,
+    previewPositionOverride,
+  } = useSelectionContext();
   const active = game.state.getActivePlayer();
 
   // The Transition screen is a full-bleed "next player, get ready" view that
@@ -47,24 +57,26 @@ export function InfoMenu() {
       ? previewPositionOverride.position
       : displayUnit?.getPosition();
 
-  return (
-    <div style={panelStyle}>
-      {displayUnit && displayPosition ? (
-        <UnitDisplay
-          unit={displayUnit}
-          position={displayPosition}
-          isLocked={isLocked}
-          perspectiveTeamId={active}
-          game={game}
-          dispatch={dispatch}
-        />
-      ) : (
-        <p style={idleStyle}>
-          {cursorOnMap ? "Hover a unit to inspect." : "Location is out of the map area"}
-        </p>
-      )}
-    </div>
-  );
+  // Priority: locked-unit > hovered-unit > terrain at cursor > out-of-map idle.
+  let body: React.ReactNode;
+  if (displayUnit && displayPosition) {
+    body = (
+      <UnitDisplay
+        unit={displayUnit}
+        position={displayPosition}
+        isLocked={isLocked}
+        perspectiveTeamId={active}
+        game={game}
+        dispatch={dispatch}
+      />
+    );
+  } else if (cursorOnMap) {
+    body = <TerrainDisplay hit={hoveredTerrainHit} />;
+  } else {
+    body = <p style={idleStyle}>Location is out of the map area</p>;
+  }
+
+  return <div style={panelStyle}>{body}</div>;
 }
 
 interface UnitDisplayProps {
@@ -132,6 +144,40 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
   );
 }
 
+/**
+ * Terrain info — the cursor is over a polygon, a wall, or open ground.
+ * All display fields come from `terrainCatalog`, so adding a new terrain
+ * kind never needs to touch this component.
+ */
+function TerrainDisplay({ hit }: { hit: TerrainHit | undefined }) {
+  if (!hit) {
+    return (
+      <div style={unitDisplayStyle}>
+        <div style={headerRowStyle}>
+          <div style={{ flex: 1 }}>
+            <div style={nameStyle}>Open</div>
+            <div style={subRowStyle}>Terrain Type: Open (none)</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  const entry = hit.kind === "polygon"
+    ? polygonTerrainCatalog[hit.polygon.terrainType]
+    : wallTerrainCatalog[hit.wall.wallType];
+  return (
+    <div style={unitDisplayStyle}>
+      <div style={headerRowStyle}>
+        <div style={{ flex: 1 }}>
+          <div style={nameStyle}>{entry.displayName}</div>
+          <div style={subRowStyle}>Stealth ×{entry.stealthMultiplier}</div>
+        </div>
+      </div>
+      <div style={detailRowStyle}>{entry.ruleDescription}</div>
+    </div>
+  );
+}
+
 function MiniSymbol({ unit, perspectiveTeamId }: { unit: Unit; perspectiveTeamId: TeamId }) {
   const sidc = buildSidc(unit, perspectiveTeamId);
   const dataUrl = useMemo(() => {
@@ -167,19 +213,17 @@ function getStealthAtPosition(unit: Unit, position: Point, map: GameMap): Stealt
 
   const inherent = unit.getInherentConcealmentModifier();
   if (inherent > 1) {
-    // For now, Infantry dug-in is the only inherent source > 1.
+    // Infantry dug-in is currently the only inherent source > 1; the label
+    // is derived from the well-known dugInStealthModifier value rather than
+    // an instance check. When another inherent source is added, this can
+    // promote to a virtual on Unit.
     candidates.push({ mod: inherent, label: inherent === dugInStealthModifier ? "dug in" : "inherent" });
   }
 
   for (const poly of map.polygons) {
     if (!poly.containsPoint(position)) continue;
-    if (poly.terrainType === "Building") {
-      candidates.push({ mod: polygonStealthModifier.Building, label: "Building" });
-    } else if (poly.terrainType === "TallWoods") {
-      candidates.push({ mod: polygonStealthModifier.TallWoods, label: "Tall Woods" });
-    } else if (poly.terrainType === "ShortTerrain") {
-      candidates.push({ mod: polygonStealthModifier.ShortTerrain, label: "Short Terrain" });
-    }
+    const entry = polygonTerrainCatalog[poly.terrainType];
+    candidates.push({ mod: entry.stealthMultiplier, label: entry.displayName });
   }
 
   if (candidates.length === 0) return { value: 1, source: "none" };

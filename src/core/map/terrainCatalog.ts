@@ -71,7 +71,7 @@ export const polygonTerrainCatalog: Record<PolygonTerrainType, PolygonTerrainEnt
     kind: "Building",
     displayName: "Building",
     stealthMultiplier: polygonStealthModifier.Building,
-    ruleDescription: `Multiplies stealth ×${polygonStealthModifier.Building} for units inside.`,
+    ruleDescription: `Multiplies stealth ×${polygonStealthModifier.Building} for units inside; blocks LOS that crosses two edges.`,
     visual: { fill: "#9a9a9a", stroke: "#333", opacity: 0.7 },
     appliesAsConcealment(poly, _from, to) {
       return poly.containsPoint(to);

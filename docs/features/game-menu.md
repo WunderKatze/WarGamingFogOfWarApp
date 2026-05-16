@@ -275,3 +275,33 @@ Debug options sub-panel:
 6. Build `DebugPanel` + Show All Units wiring + `debugUsedThisTurn` flag.
 7. Update `TransitionView` to display the debug notice.
 8. Edge-case pass against §4.
+
+---
+
+## 9. Known issues (pending fixes before Complete)
+
+Two bugs are deferred while the map-editor feature is built. They do not
+block playable use of the Adjust Vision Rules editor or Show All Units —
+both core flows work — but they should be fixed before this feature can
+be marked Complete.
+
+1. **Rule-set Import doesn't fully complete the load.** Picking a valid
+   exported JSON file appears to start the flow but doesn't end with the
+   set added to the dropdown and activated. Likely candidates: the
+   `<input type="file">` change handler isn't firing in the expected
+   sequence, `parseRuleSetFile` is rejecting a shape we just exported,
+   or `setSavedSets` / `writeSavedSets` are racing. Verify with a fresh
+   localStorage and a freshly exported file from the same session.
+2. **Debug Mode "previous player used Debug Mode" notice doesn't appear
+   on the Transition screen** in some flows. The audit flag
+   `GameState.debugUsedThisTurn` is being set (3 unit tests pass), and
+   the parallel `rulesChangedThisTurn` notice renders correctly from the
+   same TransitionView code path — so the divergence is likely in either
+   the dispatch wiring from `DebugProvider.setShowAllUnits` or a stale
+   React closure around `game.state.debugUsedThisTurn` at the
+   TransitionView read site. Compare against the working
+   `RulesProvider.setRules` path for the diff.
+
+When picking these up: reproduce against the latest commit on `main`,
+not against any stale build (HMR has occasionally lagged during this
+feature's development — a hard refresh is part of the repro).

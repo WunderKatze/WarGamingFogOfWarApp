@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Circle, Group, Line, Rect, Text } from "react-konva";
-import { polygonTerrainCatalog } from "../../core/map/terrainCatalog.js";
+import { polygonTerrainCatalog, wallTerrainCatalog } from "../../core/map/terrainCatalog.js";
 import { fromGameMap, toGameMap, type WorkingMap } from "../../core/map/WorkingMap.js";
 import type { Point, PolygonTerrainType, WallType } from "../../core/types.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
@@ -37,6 +37,9 @@ export function MapEditor() {
   // Polygon tool draft — accumulated vertices for the in-progress shape.
   // Empty array means no draft is active.
   const [polygonDraft, setPolygonDraft] = useState<Point[]>([]);
+  // Wall tool draft — the start point after the first click. Undefined
+  // means no wall is in progress; the second click commits and clears.
+  const [wallDraft, setWallDraft] = useState<Point | undefined>(undefined);
   // Last cursor position over the map, in inches. Used to draw the
   // preview segment from the last placed vertex to the cursor.
   const [cursorPos, setCursorPos] = useState<Point | undefined>(undefined);
@@ -54,10 +57,11 @@ export function MapEditor() {
   const snap = (p: Point): Point =>
     snapToGrid ? { x: Math.round(p.x), y: Math.round(p.y) } : p;
 
-  // Switching tools mid-draft cancels the in-progress polygon so we
-  // don't accidentally commit it later.
+  // Switching tools mid-draft cancels in-progress shapes so we don't
+  // accidentally commit them with the new tool's settings later.
   useEffect(() => {
     if (tool !== "polygon") setPolygonDraft([]);
+    if (tool !== "wall") setWallDraft(undefined);
   }, [tool]);
 
   const commitPolygon = () => {
@@ -73,9 +77,33 @@ export function MapEditor() {
     setPolygonDraft([]);
   };
 
+  const commitWall = (from: Point, to: Point) => {
+    // Degenerate (zero-length) walls would be a snap-on artifact: two
+    // clicks on the same grid intersection. Silently drop so the user
+    // isn't left with an invisible wall they need to delete.
+    if (from.x === to.x && from.y === to.y) {
+      setWallDraft(undefined);
+      return;
+    }
+    const id = `editor-wall-${nextIdRef.current++}`;
+    setWorkingMap((wm) => ({
+      ...wm,
+      walls: [...wm.walls, { id, from, to, wallType }],
+    }));
+    setWallDraft(undefined);
+  };
+
   const handleMapClick = (position: Point) => {
-    if (tool !== "polygon") return;
-    setPolygonDraft((draft) => [...draft, snap(position)]);
+    const snapped = snap(position);
+    if (tool === "polygon") {
+      setPolygonDraft((draft) => [...draft, snapped]);
+    } else if (tool === "wall") {
+      if (wallDraft === undefined) {
+        setWallDraft(snapped);
+      } else {
+        commitWall(wallDraft, snapped);
+      }
+    }
   };
 
   // Snap the cursor at the source so every downstream consumer (preview
@@ -101,6 +129,7 @@ export function MapEditor() {
       } else if (e.key === "Escape") {
         e.preventDefault();
         setPolygonDraft([]);
+        setWallDraft(undefined);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -189,6 +218,13 @@ export function MapEditor() {
                   vertices={polygonDraft}
                   cursor={cursorPos}
                   terrainType={polygonType}
+                />
+              )}
+              {tool === "wall" && wallDraft && (
+                <WallDraftOverlay
+                  from={wallDraft}
+                  cursor={cursorPos}
+                  wallType={wallType}
                 />
               )}
             </>
@@ -354,6 +390,40 @@ function PolygonDraftOverlay({ vertices, cursor, terrainType }: PolygonDraftOver
           fill={stroke}
         />
       ))}
+    </Group>
+  );
+}
+
+interface WallDraftOverlayProps {
+  from: Point;
+  cursor: Point | undefined;
+  wallType: WallType;
+}
+
+/**
+ * Renders the in-progress wall: a dot at the placed start point and a
+ * dashed preview segment from that point to the cursor, drawn in the
+ * wall-catalog stroke color and width so the previewed wall matches
+ * what will commit. Distance label sits at the midpoint.
+ */
+function WallDraftOverlay({ from, cursor, wallType }: WallDraftOverlayProps) {
+  const px = theme.pixelsPerInch;
+  const { stroke, strokeWidth } = wallTerrainCatalog[wallType].visual;
+  return (
+    <Group listening={false}>
+      <Circle x={from.x * px} y={from.y * px} radius={3} fill={stroke} />
+      {cursor && (
+        <>
+          <Line
+            points={[from.x * px, from.y * px, cursor.x * px, cursor.y * px]}
+            stroke={stroke}
+            strokeWidth={strokeWidth}
+            dash={[6, 4]}
+            opacity={0.7}
+          />
+          <SegmentLabel from={from} to={cursor} />
+        </>
+      )}
     </Group>
   );
 }

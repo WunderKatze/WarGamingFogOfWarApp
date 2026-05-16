@@ -73,10 +73,10 @@ export class Game {
    */
   startTurn(): void {
     this.requirePhase("Transition");
-    // Cross-turn notices (vision-rules-changed, future debug-used) are read
-    // by TransitionView and consumed here so they don't bleed into the next
-    // player's turn.
+    // Cross-turn notices are read by TransitionView and consumed here so
+    // they don't bleed into the next player's turn.
     this.state.rulesChangedThisTurn = false;
+    this.state.debugUsedThisTurn = false;
     if (!this.state.isDeploymentComplete()) {
       this.state.phase = "Deploy";
       return;
@@ -210,6 +210,16 @@ export class Game {
    */
   markRulesChanged(): void {
     this.state.rulesChangedThisTurn = true;
+  }
+
+  /**
+   * Records that the active player toggled Debug Mode on at any point
+   * during this turn. Same idempotent flag-flip pattern as
+   * `markRulesChanged` — once set, it stays set until `startTurn` clears
+   * it for the next player.
+   */
+  markDebugUsed(): void {
+    this.state.debugUsedThisTurn = true;
   }
 
   // --- Internals ---

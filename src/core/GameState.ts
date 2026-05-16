@@ -71,6 +71,15 @@ export class GameState {
    */
   rulesChangedThisTurn = false;
 
+  /**
+   * Set when Debug Mode (Show All Units) was toggled on at any point during
+   * the active player's turn. Drives the "previous player used Debug Mode"
+   * notice on the next player's Transition screen, then cleared by
+   * `startTurn`. The toggle itself is session-only UI state — this flag is
+   * the *audit* that survives into the next turn.
+   */
+  debugUsedThisTurn = false;
+
   constructor(init: GameStateInit) {
     if (init.players.length < 2) {
       throw new Error("GameState requires at least 2 players");

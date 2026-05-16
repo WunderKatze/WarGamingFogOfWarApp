@@ -3,6 +3,7 @@ import { TerrainPolygon } from "../core/map/TerrainPolygon.js";
 import { TerrainWall } from "../core/map/TerrainWall.js";
 import { GameMenu } from "./components/GameMenu.js";
 import { InfoMenu } from "./components/InfoMenu.js";
+import { DebugProvider } from "./hooks/useDebugContext.js";
 import { useGame } from "./hooks/useGame.js";
 import { GameProvider, useGameContext } from "./hooks/useGameContext.js";
 import { RulesProvider } from "./hooks/useRulesContext.js";
@@ -64,12 +65,14 @@ export function App() {
   return (
     <GameProvider value={{ game, dispatch, reset }}>
       <RulesProvider>
-        <SelectionProvider>
-          <Header />
-          <PhaseRouter />
-          <InfoMenu />
-          <GameMenu />
-        </SelectionProvider>
+        <DebugProvider>
+          <SelectionProvider>
+            <Header />
+            <PhaseRouter />
+            <InfoMenu />
+            <GameMenu />
+          </SelectionProvider>
+        </DebugProvider>
       </RulesProvider>
     </GameProvider>
   );

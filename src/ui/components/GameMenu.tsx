@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { theme } from "../theme.js";
+import { DebugPanel } from "./DebugPanel.js";
 import { RulesEditor } from "./RulesEditor.js";
 
 /**
@@ -94,7 +95,7 @@ export function GameMenu() {
           )}
           {view === "debug" && (
             <SubPanel title="Debug options" onBack={() => setView("root")}>
-              <p style={comingSoonStyle}>(Debug toggles land in the next commit.)</p>
+              <DebugPanel />
             </SubPanel>
           )}
         </div>
@@ -206,10 +207,4 @@ const backButtonStyle: CSSProperties = {
 
 const subPanelBodyStyle: CSSProperties = {
   padding: theme.spacing.md,
-};
-
-const comingSoonStyle: CSSProperties = {
-  margin: 0,
-  fontSize: theme.fontSize.sm,
-  color: theme.colors.textMuted,
 };

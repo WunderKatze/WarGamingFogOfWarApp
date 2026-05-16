@@ -420,3 +420,33 @@ describe("Game — rules-changed flag", () => {
     expect(g.state.rulesChangedThisTurn).toBe(true);
   });
 });
+
+describe("Game — debug-used flag", () => {
+  it("debugUsedThisTurn defaults to false on a new game", () => {
+    const g = makeGame();
+    expect(g.state.debugUsedThisTurn).toBe(false);
+  });
+
+  it("markDebugUsed sets the flag to true and is idempotent", () => {
+    const g = makeGame();
+    g.markDebugUsed();
+    g.markDebugUsed();
+    expect(g.state.debugUsedThisTurn).toBe(true);
+  });
+
+  it("startTurn clears both cross-turn flags", () => {
+    const g = makeGame();
+    g.deployUnit({ type: "Infantry", name: "A1", position: p(10, 10) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Infantry", name: "B1", position: p(20, 20) });
+    g.endDeployment();
+    g.markDebugUsed();
+    g.markRulesChanged();
+    expect(g.state.debugUsedThisTurn).toBe(true);
+    expect(g.state.rulesChangedThisTurn).toBe(true);
+    g.startTurn();
+    expect(g.state.debugUsedThisTurn).toBe(false);
+    expect(g.state.rulesChangedThisTurn).toBe(false);
+  });
+});

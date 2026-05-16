@@ -5,10 +5,12 @@ import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
+import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
 
-function getVisibleUnits(game: Game): Unit[] {
+function getVisibleUnits(game: Game, showAllUnits: boolean): Unit[] {
+  if (showAllUnits) return [...game.state.units];
   const active = game.state.getActivePlayer();
   const teamList = game.state.visionState.teamLists.get(active) ?? new Set<UnitId>();
   return game.state.units.filter(
@@ -42,12 +44,13 @@ export function MoveView() {
     setCursorOnMap,
     setPreviewPositionOverride,
   } = useSelectionContext();
+  const { showAllUnits } = useDebugContext();
   const active = game.state.getActivePlayer();
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null);
   const [shiftHeld, setShiftHeld] = useState(false);
   const [waypointToggle, setWaypointToggle] = useState(false);
 
-  const visible = getVisibleUnits(game);
+  const visible = getVisibleUnits(game, showAllUnits);
   const effectiveSelectedId = activeMove?.unitId ?? selectedUnitId;
   const selected = effectiveSelectedId ? game.state.getUnitById(effectiveSelectedId) : undefined;
   const canUndo = game.state.moveHistory.length > 0;

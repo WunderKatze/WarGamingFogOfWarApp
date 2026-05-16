@@ -3,6 +3,7 @@ import type { Point, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
+import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
 
@@ -17,8 +18,10 @@ export function DeploymentView() {
     setHoveredTerrainHit,
     setCursorOnMap,
   } = useSelectionContext();
+  const { showAllUnits } = useDebugContext();
   const activePlayer = game.state.getActivePlayer();
   const ownUnits = game.state.units.filter((u) => u.teamId === activePlayer);
+  const visible = showAllUnits ? [...game.state.units] : ownUnits;
 
   // Pen settings — the kind of unit that will be placed on the next map click.
   const [penType, setPenType] = useState<UnitType>("Infantry");
@@ -115,7 +118,7 @@ export function DeploymentView() {
       <main style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <MapCanvas
           map={game.state.map}
-          units={ownUnits}
+          units={visible}
           perspectiveTeamId={activePlayer}
           selectedUnitId={selectedUnitId}
           onUnitClick={handleUnitClick}

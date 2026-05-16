@@ -1,4 +1,15 @@
+import type { CSSProperties } from "react";
 import { useGameContext } from "../hooks/useGameContext.js";
+
+const noticeStyle: CSSProperties = {
+  background: "rgba(255, 200, 60, 0.12)",
+  border: "1px solid #c9a14b",
+  color: "#ffd87a",
+  borderRadius: 6,
+  padding: "10px 16px",
+  fontSize: 14,
+  textAlign: "center",
+};
 
 export function TransitionView() {
   const { game, dispatch } = useGameContext();
@@ -6,6 +17,8 @@ export function TransitionView() {
   const nextIsDeploy = !game.state.isDeploymentComplete();
   const recent = game.state.recentReveals;
   const buttonLabel = nextIsDeploy ? "Begin Deployment" : "Start Turn";
+  const debugUsed = game.state.debugUsedThisTurn;
+  const rulesChanged = game.state.rulesChangedThisTurn;
 
   const reveal = (ids: string[]) =>
     ids.map((id) => game.state.getUnitById(id)?.name ?? id).join(", ");
@@ -28,6 +41,28 @@ export function TransitionView() {
       <h1 style={{ fontSize: 48, margin: 0 }}>
         Team {activePlayer} — your turn
       </h1>
+
+      {(debugUsed || rulesChanged) && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            maxWidth: 480,
+          }}
+        >
+          {debugUsed && (
+            <div style={noticeStyle}>
+              ⚠ The previous player used Debug Mode this turn.
+            </div>
+          )}
+          {rulesChanged && (
+            <div style={noticeStyle}>
+              ⚠ Vision Rules changed this turn.
+            </div>
+          )}
+        </div>
+      )}
 
       {(recent.added.length > 0 || recent.removed.length > 0) && (
         <div

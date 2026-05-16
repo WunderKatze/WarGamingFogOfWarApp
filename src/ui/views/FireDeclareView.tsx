@@ -3,10 +3,12 @@ import type { UnitId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
+import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
 
-function getVisibleUnits(game: Game): Unit[] {
+function getVisibleUnits(game: Game, showAllUnits: boolean): Unit[] {
+  if (showAllUnits) return [...game.state.units];
   const active = game.state.getActivePlayer();
   const teamList = game.state.visionState.teamLists.get(active) ?? new Set<UnitId>();
   return game.state.units.filter(
@@ -23,8 +25,9 @@ export function FireDeclareView() {
     setHoveredTerrainHit,
     setCursorOnMap,
   } = useSelectionContext();
+  const { showAllUnits } = useDebugContext();
   const active = game.state.getActivePlayer();
-  const visible = getVisibleUnits(game);
+  const visible = getVisibleUnits(game, showAllUnits);
   const fired = game.state.firedThisTurn;
 
   const handleUnitClick = (unit: Unit) => {

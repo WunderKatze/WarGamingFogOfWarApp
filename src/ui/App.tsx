@@ -1,6 +1,7 @@
 import { GameMap } from "../core/map/GameMap.js";
 import { TerrainPolygon } from "../core/map/TerrainPolygon.js";
 import { TerrainWall } from "../core/map/TerrainWall.js";
+import { GameMenu } from "./components/GameMenu.js";
 import { InfoMenu } from "./components/InfoMenu.js";
 import { useGame } from "./hooks/useGame.js";
 import { GameProvider, useGameContext } from "./hooks/useGameContext.js";
@@ -65,39 +66,9 @@ export function App() {
         <Header />
         <PhaseRouter />
         <InfoMenu />
-        <RestartButton />
+        <GameMenu />
       </SelectionProvider>
     </GameProvider>
-  );
-}
-
-function RestartButton() {
-  const { reset } = useGameContext();
-  const handleClick = () => {
-    if (window.confirm("Restart game? All units and turn progress will be lost.")) {
-      reset();
-    }
-  };
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      style={{
-        position: "fixed",
-        bottom: theme.spacing.lg,
-        left: theme.spacing.lg,
-        padding: `${theme.spacing.sm}px ${theme.spacing.lg}px`,
-        background: "rgba(255,255,255,0.92)",
-        color: theme.colors.text,
-        border: `1px solid ${theme.colors.sidebarBorder}`,
-        borderRadius: theme.radius.sm,
-        fontSize: theme.fontSize.sm,
-        cursor: "pointer",
-        zIndex: 1000,
-      }}
-    >
-      Restart game
-    </button>
   );
 }
 

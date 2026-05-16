@@ -146,7 +146,13 @@ export class Game {
   }
 
   deleteUnit(unitId: UnitId): void {
-    this.requirePhase("Move");
+    // Allowed in Move (mid-game losses) and Deploy (player wants to fix a
+    // misclick during setup, per docs/features/deployment-stop-gap.md §2.2).
+    if (this.state.phase !== "Move" && this.state.phase !== "Deploy") {
+      throw new Error(
+        `deleteUnit requires Move or Deploy, got ${this.state.phase}`,
+      );
+    }
     this.requireOwnUnit(unitId);
     this.state.units = this.state.units.filter((u) => u.id !== unitId);
     this.state.visionState.individualLists.delete(unitId);
@@ -158,6 +164,34 @@ export class Game {
       list.delete(unitId);
     }
     this.state.firedThisTurn.delete(unitId);
+  }
+
+  /**
+   * Reposition an already-deployed unit during the Deploy phase. Unlike
+   * `moveUnit` (Move phase, undo-tracked via moveHistory), Deploy has no
+   * undo stack — repositioning is a direct write to the unit's position.
+   * See docs/features/deployment-stop-gap.md §2.1.
+   */
+  repositionDeployedUnit(unitId: UnitId, newPosition: Point): void {
+    this.requirePhase("Deploy");
+    const unit = this.requireOwnUnit(unitId);
+    unit.setPosition(newPosition);
+  }
+
+  /**
+   * Rename a unit owned by the active player. Trims whitespace and
+   * rejects blank-after-trim. Currently Deploy-only (per stop-gap §5);
+   * promote to other phases when the broader v2 deployment refactor
+   * lands.
+   */
+  renameUnit(unitId: UnitId, newName: string): void {
+    this.requirePhase("Deploy");
+    const unit = this.requireOwnUnit(unitId);
+    const trimmed = newName.trim();
+    if (trimmed === "") {
+      throw new Error("renameUnit: name cannot be empty");
+    }
+    unit.name = trimmed;
   }
 
   toggleDugIn(unitId: UnitId): void {

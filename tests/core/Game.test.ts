@@ -79,6 +79,50 @@ describe("Game — deployment flow", () => {
     expect(g.state.getActivePlayer()).toBe("A");
     expect(g.state.isDeploymentComplete()).toBe(true);
   });
+
+  it("deleteUnit works during Deploy and removes the unit", () => {
+    const g = makeGame();
+    const u = g.deployUnit({ type: "Tank", name: "Misclick", position: p(1, 1) });
+    g.deleteUnit(u.id);
+    expect(g.state.units.find((x) => x.id === u.id)).toBeUndefined();
+  });
+
+  it("deleteUnit rejects from Transition / FireDeclare phases", () => {
+    const g = makeGame();
+    g.deployUnit({ type: "Tank", name: "A1", position: p(0, 0) });
+    g.endDeployment(); // → Transition
+    expect(() => g.deleteUnit("u1")).toThrow(/Move or Deploy/);
+  });
+
+  it("repositionDeployedUnit moves an own unit during Deploy without writing to moveHistory", () => {
+    const g = makeGame();
+    const u = g.deployUnit({ type: "Tank", name: "A1", position: p(1, 1) });
+    g.repositionDeployedUnit(u.id, p(50, 60));
+    expect(u.getPosition()).toEqual(p(50, 60));
+    expect(g.state.moveHistory).toEqual([]);
+  });
+
+  it("repositionDeployedUnit refuses to act on the opponent's unit", () => {
+    const g = makeGame();
+    g.deployUnit({ type: "Tank", name: "A1", position: p(0, 0) });
+    g.endDeployment();
+    g.startTurn(); // → B's Deploy
+    expect(() => g.repositionDeployedUnit("u1", p(50, 50))).toThrow(/cannot act on unit/);
+  });
+
+  it("renameUnit changes the unit's name and trims whitespace", () => {
+    const g = makeGame();
+    const u = g.deployUnit({ type: "Tank", name: "Old", position: p(0, 0) });
+    g.renameUnit(u.id, "  M4 Sherman  ");
+    expect(u.name).toBe("M4 Sherman");
+  });
+
+  it("renameUnit rejects blank-after-trim", () => {
+    const g = makeGame();
+    const u = g.deployUnit({ type: "Tank", name: "Old", position: p(0, 0) });
+    expect(() => g.renameUnit(u.id, "   ")).toThrow(/cannot be empty/);
+    expect(u.name).toBe("Old");
+  });
 });
 
 describe("Game — startTurn from Transition", () => {

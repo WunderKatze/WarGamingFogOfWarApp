@@ -1,7 +1,17 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { defaultRules, type Rules } from "../../core/rules.js";
 import type { Modifier, PolygonTerrainType, UnitType } from "../../core/types.js";
 import { useRulesContext } from "../hooks/useRulesContext.js";
 import { theme } from "../theme.js";
+import {
+  DEFAULT_SET_NAME,
+  downloadRuleSet,
+  parseRuleSetFile,
+  readActiveSetName,
+  readSavedSets,
+  writeActiveSetName,
+  writeSavedSets,
+} from "./ruleSetStorage.js";
 
 /**
  * Editor panel for runtime-mutable vision rules. Mounted inside the Game
@@ -13,11 +23,149 @@ import { theme } from "../theme.js";
  * which mirrors them into the core Rules singleton and marks
  * `GameState.rulesChangedThisTurn = true` for the next-turn notice.
  *
- * Saved rule sets and file import/export are NOT in this commit — they
- * land in a follow-up.
+ * Saved rule sets persist to browser localStorage; "Default" is the
+ * built-in baseline and is always present in the dropdown. JSON file
+ * import/export complements localStorage for sharing sets between users.
  */
 export function RulesEditor() {
   const { rules, setRules, resetRules } = useRulesContext();
+  const [savedSets, setSavedSets] = useState<Record<string, Rules>>(() => readSavedSets());
+  const [activeSetName, setActiveSetName] = useState<string>(() => readActiveSetName());
+  /**
+   * Non-null while the player is naming a new saved set via the inline
+   * Save-as UI. We avoid window.prompt here because Chromium renders it as
+   * a small browser-chrome dropdown that's easy to miss while focused on
+   * the bottom-of-screen menu.
+   */
+  const [pendingSaveName, setPendingSaveName] = useState<string | null>(null);
+  /**
+   * Non-null while the saved-set dropdown change is awaiting confirmation.
+   * The confirm is fired from an effect, NOT directly inside the select's
+   * onChange, because calling window.confirm synchronously while a select
+   * is committing leaves Chromium's display stuck on the previous option
+   * even after React updates the controlled `value`.
+   */
+  const [pendingSwitchName, setPendingSwitchName] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep activeSetName in sync with localStorage in case multiple tabs are
+  // open (StorageEvent fires in *other* tabs when this one writes).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "wargame.savedRuleSets") setSavedSets(readSavedSets());
+      if (e.key === "wargame.activeRuleSetName") setActiveSetName(readActiveSetName());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const applySet = (name: string) => {
+    const next = name === DEFAULT_SET_NAME ? structuredClone(defaultRules) : savedSets[name];
+    if (!next) return;
+    setRules(next);
+    setActiveSetName(name);
+    writeActiveSetName(name);
+  };
+
+  const handleSelectSet = (name: string) => {
+    if (name === activeSetName) return;
+    // Stash the target and let an effect fire the confirm — running it
+    // inside this synchronous handler leaves Chromium's select stuck.
+    setPendingSwitchName(name);
+  };
+
+  useEffect(() => {
+    if (pendingSwitchName === null) return;
+    const target = pendingSwitchName;
+    setPendingSwitchName(null);
+    if (target === activeSetName) return;
+    if (!window.confirm(`Switch to rule set "${target}"? Any in-progress edits will be replaced.`)) return;
+    applySet(target);
+    // applySet/activeSetName are stable enough that re-running on every
+    // change is benign — the early null check is the real gate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSwitchName]);
+
+  const beginSaveAs = () => {
+    setPendingSaveName(activeSetName === DEFAULT_SET_NAME ? "" : activeSetName);
+  };
+
+  const cancelSaveAs = () => {
+    setPendingSaveName(null);
+  };
+
+  const commitSaveAs = () => {
+    if (pendingSaveName === null) return;
+    const name = pendingSaveName.trim();
+    if (!name) return;
+    if (name === DEFAULT_SET_NAME) {
+      window.alert(`"${DEFAULT_SET_NAME}" is reserved.`);
+      return;
+    }
+    if (savedSets[name] && !window.confirm(`Overwrite existing "${name}"?`)) return;
+    const next = { ...savedSets, [name]: structuredClone(rules) };
+    setSavedSets(next);
+    writeSavedSets(next);
+    setActiveSetName(name);
+    writeActiveSetName(name);
+    setPendingSaveName(null);
+  };
+
+  const handleDelete = () => {
+    if (activeSetName === DEFAULT_SET_NAME) return;
+    if (!window.confirm(`Delete rule set "${activeSetName}"?`)) return;
+    const next = { ...savedSets };
+    delete next[activeSetName];
+    setSavedSets(next);
+    writeSavedSets(next);
+    setActiveSetName(DEFAULT_SET_NAME);
+    writeActiveSetName(DEFAULT_SET_NAME);
+    setRules(structuredClone(defaultRules));
+  };
+
+  const handleExport = () => {
+    downloadRuleSet(activeSetName, rules);
+  };
+
+  const handleImportClick = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-importing the same filename later
+    if (!file) return;
+    const text = await file.text();
+    const parsed = parseRuleSetFile(text);
+    if (!parsed) {
+      window.alert("Couldn't read rule set — file is malformed or missing required fields.");
+      return;
+    }
+    let name = parsed.name;
+    // "Default" is reserved for the built-in baseline; an exported Default
+    // set must be re-saved under a different name when it comes back in.
+    if (name === DEFAULT_SET_NAME) {
+      const renamed = window.prompt(`"${DEFAULT_SET_NAME}" is reserved. Save imported set as:`, "Imported");
+      if (!renamed?.trim()) return;
+      name = renamed.trim();
+      if (name === DEFAULT_SET_NAME) return; // user just typed Default again
+    }
+    if (savedSets[name]) {
+      const overwrite = window.confirm(`A rule set named "${name}" already exists. Overwrite?`);
+      if (!overwrite) {
+        const renamed = window.prompt("New name:", `${name} (imported)`);
+        if (!renamed?.trim()) return;
+        name = renamed.trim();
+        if (name === DEFAULT_SET_NAME) return;
+      }
+    }
+    const next = { ...savedSets, [name]: parsed.rules };
+    setSavedSets(next);
+    writeSavedSets(next);
+    setActiveSetName(name);
+    writeActiveSetName(name);
+    setRules(parsed.rules);
+  };
 
   const setUnitStat = (type: UnitType, field: "baseVision" | "baseStealth", value: number) => {
     setRules({
@@ -56,8 +204,75 @@ export function RulesEditor() {
     }
   };
 
+  // Filter out any "Default" key that might have leaked into savedSets from
+  // an older buggy import — the dropdown shows the built-in Default exactly
+  // once, always at the top.
+  const userSetNames = Object.keys(savedSets).filter((n) => n !== DEFAULT_SET_NAME).sort();
+  const setNames: string[] = [DEFAULT_SET_NAME, ...userSetNames];
+  const canDelete = activeSetName !== DEFAULT_SET_NAME;
+
   return (
     <div style={panelStyle}>
+      <Section title="Saved rule sets">
+        <div style={fieldRowStyle}>
+          <span style={fieldLabelStyle}>Active</span>
+          <select
+            value={activeSetName}
+            onChange={(e) => handleSelectSet(e.target.value)}
+            style={selectStyle}
+          >
+            {setNames.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+        </div>
+        <div style={buttonRowStyle}>
+          <button type="button" onClick={beginSaveAs} style={smallButtonStyle}>Save as…</button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={!canDelete}
+            style={canDelete ? smallButtonStyle : smallButtonDisabledStyle}
+          >
+            Delete
+          </button>
+          <button type="button" onClick={handleExport} style={smallButtonStyle}>Export</button>
+          <button type="button" onClick={handleImportClick} style={smallButtonStyle}>Import</button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: "none" }}
+            onChange={handleImportFile}
+          />
+        </div>
+        {pendingSaveName !== null && (
+          <div style={inlineSaveRowStyle}>
+            <input
+              autoFocus
+              type="text"
+              value={pendingSaveName}
+              onChange={(e) => setPendingSaveName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitSaveAs();
+                if (e.key === "Escape") cancelSaveAs();
+              }}
+              placeholder="New rule-set name"
+              style={inlineSaveInputStyle}
+            />
+            <button
+              type="button"
+              onClick={commitSaveAs}
+              disabled={!pendingSaveName.trim()}
+              style={pendingSaveName.trim() ? smallButtonStyle : smallButtonDisabledStyle}
+            >
+              Save
+            </button>
+            <button type="button" onClick={cancelSaveAs} style={smallButtonStyle}>Cancel</button>
+          </div>
+        )}
+      </Section>
+
       <Section title="Unit type — Infantry">
         <NumberField
           label="Base vision"
@@ -306,4 +521,50 @@ const resetButtonStyle: CSSProperties = {
   borderRadius: theme.radius.sm,
   fontSize: theme.fontSize.sm,
   cursor: "pointer",
+};
+
+const selectStyle: CSSProperties = {
+  padding: "2px 6px",
+  fontSize: theme.fontSize.sm,
+  border: `1px solid ${theme.colors.sidebarBorder}`,
+  borderRadius: theme.radius.sm,
+  background: "#fff",
+};
+
+const buttonRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: theme.spacing.xs,
+  marginTop: theme.spacing.xs,
+};
+
+const smallButtonStyle: CSSProperties = {
+  padding: `2px ${theme.spacing.sm + 2}px`,
+  background: "#fff",
+  color: theme.colors.text,
+  border: `1px solid ${theme.colors.sidebarBorder}`,
+  borderRadius: theme.radius.sm,
+  fontSize: theme.fontSize.xs,
+  cursor: "pointer",
+};
+
+const smallButtonDisabledStyle: CSSProperties = {
+  ...smallButtonStyle,
+  opacity: 0.4,
+  cursor: "not-allowed",
+};
+
+const inlineSaveRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing.xs,
+  marginTop: theme.spacing.xs,
+};
+
+const inlineSaveInputStyle: CSSProperties = {
+  flex: 1,
+  padding: "2px 6px",
+  fontSize: theme.fontSize.sm,
+  border: `1px solid ${theme.colors.sidebarBorder}`,
+  borderRadius: theme.radius.sm,
 };

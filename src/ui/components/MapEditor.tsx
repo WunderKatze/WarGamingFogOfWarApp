@@ -6,6 +6,7 @@ import type { Point, PolygonTerrainType, WallType } from "../../core/types.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useMapEditorContext } from "../hooks/useMapEditorContext.js";
+import type { TerrainHit } from "../hooks/useSelectionContext.js";
 import { theme } from "../theme.js";
 
 /**
@@ -40,6 +41,10 @@ export function MapEditor() {
   // Wall tool draft — the start point after the first click. Undefined
   // means no wall is in progress; the second click commits and clears.
   const [wallDraft, setWallDraft] = useState<Point | undefined>(undefined);
+  // Hovered shape under the cursor. Only meaningful when the delete
+  // tool is active — used to drive the highlight and to know what to
+  // remove on click.
+  const [hoveredTerrain, setHoveredTerrain] = useState<TerrainHit | undefined>(undefined);
   // Last cursor position over the map, in inches. Used to draw the
   // preview segment from the last placed vertex to the cursor.
   const [cursorPos, setCursorPos] = useState<Point | undefined>(undefined);
@@ -59,9 +64,12 @@ export function MapEditor() {
 
   // Switching tools mid-draft cancels in-progress shapes so we don't
   // accidentally commit them with the new tool's settings later.
+  // Also clears any delete-tool hover so we don't keep a stale red
+  // outline on a shape after switching away from delete.
   useEffect(() => {
     if (tool !== "polygon") setPolygonDraft([]);
     if (tool !== "wall") setWallDraft(undefined);
+    if (tool !== "delete") setHoveredTerrain(undefined);
   }, [tool]);
 
   const commitPolygon = () => {
@@ -93,6 +101,20 @@ export function MapEditor() {
     setWallDraft(undefined);
   };
 
+  const deleteHovered = () => {
+    if (!hoveredTerrain) return;
+    if (hoveredTerrain.kind === "polygon") {
+      const id = hoveredTerrain.polygon.id;
+      setWorkingMap((wm) => ({ ...wm, polygons: wm.polygons.filter((p) => p.id !== id) }));
+    } else {
+      const id = hoveredTerrain.wall.id;
+      setWorkingMap((wm) => ({ ...wm, walls: wm.walls.filter((w) => w.id !== id) }));
+    }
+    // The hovered shape is gone; clear so the highlight doesn't linger
+    // on a now-removed id until the cursor moves to a new shape.
+    setHoveredTerrain(undefined);
+  };
+
   const handleMapClick = (position: Point) => {
     const snapped = snap(position);
     if (tool === "polygon") {
@@ -103,6 +125,8 @@ export function MapEditor() {
       } else {
         commitWall(wallDraft, snapped);
       }
+    } else if (tool === "delete") {
+      deleteHovered();
     }
   };
 
@@ -208,6 +232,7 @@ export function MapEditor() {
           perspectiveTeamId={game.state.getActivePlayer()}
           onMapClick={handleMapClick}
           onMapPointerMove={handleMapPointerMove}
+          onHoveredTerrainChange={tool === "delete" ? setHoveredTerrain : undefined}
           overlay={
             <>
               {snapToGrid && (
@@ -226,6 +251,9 @@ export function MapEditor() {
                   cursor={cursorPos}
                   wallType={wallType}
                 />
+              )}
+              {tool === "delete" && hoveredTerrain && (
+                <DeleteHighlight hit={hoveredTerrain} />
               )}
             </>
           }
@@ -391,6 +419,45 @@ function PolygonDraftOverlay({ vertices, cursor, terrainType }: PolygonDraftOver
         />
       ))}
     </Group>
+  );
+}
+
+/**
+ * Bright red outline drawn on top of whatever shape the cursor is over
+ * while the delete tool is active, so the player has a clear "this is
+ * what a click will remove" affordance. Polygon: red dashed boundary;
+ * wall: thicker red line overlay covering the original.
+ */
+function DeleteHighlight({ hit }: { hit: TerrainHit }) {
+  const px = theme.pixelsPerInch;
+  const stroke = "#e63946";
+  if (hit.kind === "polygon") {
+    const pts = hit.polygon.vertices.flatMap((v) => [v.x * px, v.y * px]);
+    return (
+      <Line
+        points={pts}
+        stroke={stroke}
+        strokeWidth={2}
+        dash={[6, 4]}
+        closed
+        listening={false}
+      />
+    );
+  }
+  const baseWidth = wallTerrainCatalog[hit.wall.wallType].visual.strokeWidth;
+  return (
+    <Line
+      points={[
+        hit.wall.from.x * px,
+        hit.wall.from.y * px,
+        hit.wall.to.x * px,
+        hit.wall.to.y * px,
+      ]}
+      stroke={stroke}
+      strokeWidth={baseWidth + 2}
+      opacity={0.85}
+      listening={false}
+    />
   );
 }
 

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Circle, Group, Line, Rect, Text } from "react-konva";
+import { polygonTerrainCatalog } from "../../core/map/terrainCatalog.js";
 import { fromGameMap, toGameMap, type WorkingMap } from "../../core/map/WorkingMap.js";
-import type { PolygonTerrainType, WallType } from "../../core/types.js";
+import type { Point, PolygonTerrainType, WallType } from "../../core/types.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useMapEditorContext } from "../hooks/useMapEditorContext.js";
@@ -32,12 +34,79 @@ export function MapEditor() {
   const [wallType, setWallType] = useState<WallType>("Short");
   const [snapToGrid, setSnapToGrid] = useState(true);
 
+  // Polygon tool draft — accumulated vertices for the in-progress shape.
+  // Empty array means no draft is active.
+  const [polygonDraft, setPolygonDraft] = useState<Point[]>([]);
+  // Last cursor position over the map, in inches. Used to draw the
+  // preview segment from the last placed vertex to the cursor.
+  const [cursorPos, setCursorPos] = useState<Point | undefined>(undefined);
+  // Monotonic counter for generating unique terrain ids when we commit
+  // a new shape from the editor.
+  const nextIdRef = useRef(1);
+
   // Derived GameMap for rendering — rebuilt whenever the working draft
   // changes. Cheap (just constructs class instances from plain data).
   const renderMap = useMemo(() => toGameMap(workingMap), [workingMap]);
 
   const setWidth = (w: number) => setWorkingMap((wm) => ({ ...wm, width: w }));
   const setHeight = (h: number) => setWorkingMap((wm) => ({ ...wm, height: h }));
+
+  const snap = (p: Point): Point =>
+    snapToGrid ? { x: Math.round(p.x), y: Math.round(p.y) } : p;
+
+  // Switching tools mid-draft cancels the in-progress polygon so we
+  // don't accidentally commit it later.
+  useEffect(() => {
+    if (tool !== "polygon") setPolygonDraft([]);
+  }, [tool]);
+
+  const commitPolygon = () => {
+    if (polygonDraft.length < 3) return;
+    const id = `editor-poly-${nextIdRef.current++}`;
+    setWorkingMap((wm) => ({
+      ...wm,
+      polygons: [
+        ...wm.polygons,
+        { id, terrainType: polygonType, vertices: [...polygonDraft] },
+      ],
+    }));
+    setPolygonDraft([]);
+  };
+
+  const handleMapClick = (position: Point) => {
+    if (tool !== "polygon") return;
+    setPolygonDraft((draft) => [...draft, snap(position)]);
+  };
+
+  // Snap the cursor at the source so every downstream consumer (preview
+  // segment, future tool previews) sees the same point the click would
+  // commit to. Without this the dashed preview chases the raw cursor and
+  // it looks like snap is off even though placement is rounding.
+  const handleMapPointerMove = (position: Point) => {
+    setCursorPos(snap(position));
+  };
+
+  // Keyboard: Enter commits the in-progress polygon, Escape cancels.
+  // Ignored while focus is in a text input so the dimension fields
+  // remain editable.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitPolygon();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setPolygonDraft([]);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [polygonDraft, polygonType, snapToGrid]);
 
   const handleCancel = () => {
     // TODO (Ctrl+Z + Apply / Save / Load checkpoints): if the draft has
@@ -108,6 +177,22 @@ export function MapEditor() {
           map={renderMap}
           units={[]}
           perspectiveTeamId={game.state.getActivePlayer()}
+          onMapClick={handleMapClick}
+          onMapPointerMove={handleMapPointerMove}
+          overlay={
+            <>
+              {snapToGrid && (
+                <GridOverlay width={workingMap.width} height={workingMap.height} />
+              )}
+              {tool === "polygon" && polygonDraft.length > 0 && (
+                <PolygonDraftOverlay
+                  vertices={polygonDraft}
+                  cursor={cursorPos}
+                  terrainType={polygonType}
+                />
+              )}
+            </>
+          }
         />
       </main>
     </div>
@@ -175,6 +260,143 @@ interface RadioRowProps<T extends string> {
   current: T;
   onChange: (v: T) => void;
   children: ReactNode;
+}
+
+/**
+ * Faint dotted 1.0″ grid drawn over the map rect. Rendered in the
+ * effects layer so it stays under the polygon-draft preview but on top
+ * of placed terrain. Listening is disabled (the effects layer already
+ * sets that) so it never swallows clicks.
+ */
+function GridOverlay({ width, height }: { width: number; height: number }) {
+  const px = theme.pixelsPerInch;
+  const stroke = "rgba(0,0,0,0.18)";
+  const lines: ReactNode[] = [];
+  for (let x = 0; x <= width; x++) {
+    lines.push(
+      <Line
+        key={`v${x}`}
+        points={[x * px, 0, x * px, height * px]}
+        stroke={stroke}
+        strokeWidth={0.5}
+        dash={[1, 3]}
+      />,
+    );
+  }
+  for (let y = 0; y <= height; y++) {
+    lines.push(
+      <Line
+        key={`h${y}`}
+        points={[0, y * px, width * px, y * px]}
+        stroke={stroke}
+        strokeWidth={0.5}
+        dash={[1, 3]}
+      />,
+    );
+  }
+  return <Group listening={false}>{lines}</Group>;
+}
+
+interface PolygonDraftOverlayProps {
+  vertices: readonly Point[];
+  cursor: Point | undefined;
+  terrainType: PolygonTerrainType;
+}
+
+/**
+ * Renders the in-progress polygon: a dashed line through the placed
+ * vertices, a small filled dot at each vertex, and a preview segment
+ * from the last vertex to the cursor (so the player can see where the
+ * next click will land). Color matches the terrain catalog's fill so
+ * the previewed shape reads as the same kind it will commit to.
+ */
+function PolygonDraftOverlay({ vertices, cursor, terrainType }: PolygonDraftOverlayProps) {
+  if (vertices.length === 0) return null;
+  const px = theme.pixelsPerInch;
+  const stroke = polygonTerrainCatalog[terrainType].visual.stroke;
+  const points = vertices.flatMap((v) => [v.x * px, v.y * px]);
+  const lastVertex = vertices[vertices.length - 1]!;
+  return (
+    <Group listening={false}>
+      {/* Placed segments — a polyline through every vertex placed so far. */}
+      {vertices.length >= 2 && (
+        <Line
+          points={points}
+          stroke={stroke}
+          strokeWidth={1.5}
+          dash={[6, 4]}
+        />
+      )}
+      {/* Preview segment from the last vertex to the cursor. */}
+      {cursor && (
+        <Line
+          points={[lastVertex.x * px, lastVertex.y * px, cursor.x * px, cursor.y * px]}
+          stroke={stroke}
+          strokeWidth={1.5}
+          dash={[3, 3]}
+          opacity={0.6}
+        />
+      )}
+      {/* Distance labels at each segment midpoint — placed segments and
+          the preview segment alike, so the player can compare lengths
+          against the physical table without counting grid squares. */}
+      {vertices.slice(1).map((v, i) => (
+        <SegmentLabel key={`p${i}`} from={vertices[i]!} to={v} />
+      ))}
+      {cursor && <SegmentLabel from={lastVertex} to={cursor} />}
+      {/* Vertex dots. */}
+      {vertices.map((v, i) => (
+        <Circle
+          key={i}
+          x={v.x * px}
+          y={v.y * px}
+          radius={3}
+          fill={stroke}
+        />
+      ))}
+    </Group>
+  );
+}
+
+/**
+ * Small inch-distance label sitting at the midpoint of a segment. White
+ * background pill so it remains readable over any terrain color. Hidden
+ * for segments shorter than ~0.5″ to avoid label clutter when the player
+ * is fine-tuning a vertex.
+ */
+function SegmentLabel({ from, to }: { from: Point; to: Point }) {
+  const px = theme.pixelsPerInch;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 0.5) return null;
+  const label = `${dist.toFixed(1).replace(/\.0$/, "")}″`;
+  const width = label.length * 6.5 + 8;
+  const height = 14;
+  const midX = ((from.x + to.x) / 2) * px;
+  const midY = ((from.y + to.y) / 2) * px;
+  return (
+    <Group x={midX - width / 2} y={midY - height / 2} listening={false}>
+      <Rect
+        width={width}
+        height={height}
+        fill="rgba(255,255,255,0.9)"
+        stroke="rgba(0,0,0,0.25)"
+        strokeWidth={0.5}
+        cornerRadius={3}
+      />
+      <Text
+        text={label}
+        width={width}
+        height={height}
+        align="center"
+        verticalAlign="middle"
+        fontSize={10}
+        fontStyle="600"
+        fill="#222"
+      />
+    </Group>
+  );
 }
 
 function RadioRow<T extends string>({ name, value, current, onChange, children }: RadioRowProps<T>) {

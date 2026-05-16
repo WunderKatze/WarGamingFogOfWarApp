@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Circle, Group, Line, Rect, Text } from "react-konva";
 import { polygonTerrainCatalog, wallTerrainCatalog } from "../../core/map/terrainCatalog.js";
-import { fromGameMap, toGameMap, type WorkingMap } from "../../core/map/WorkingMap.js";
+import {
+  fromGameMap,
+  parseWorkingMap,
+  serializeWorkingMap,
+  toGameMap,
+  type WorkingMap,
+} from "../../core/map/WorkingMap.js";
 import type { Point, PolygonTerrainType, WallType } from "../../core/types.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { useGameContext } from "../hooks/useGameContext.js";
@@ -51,6 +57,19 @@ export function MapEditor() {
   // Monotonic counter for generating unique terrain ids when we commit
   // a new shape from the editor.
   const nextIdRef = useRef(1);
+  // Hidden file picker for Load. Click()'d programmatically from the
+  // Load… button so we don't need to render a styled file input.
+  const loadInputRef = useRef<HTMLInputElement>(null);
+  // Serialized snapshot of the draft as it was last saved (or as
+  // seeded from the game on open). Used to detect unsaved edits before
+  // Load discards them — we compare against the current draft.
+  const seedRef = useRef<string>("");
+  useEffect(() => {
+    seedRef.current = serializeWorkingMap(workingMap);
+    // Capture only on mount — every subsequent edit should be diff-able
+    // against this initial baseline.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Derived GameMap for rendering — rebuilt whenever the working draft
   // changes. Cheap (just constructs class instances from plain data).
@@ -168,11 +187,37 @@ export function MapEditor() {
   };
 
   const handleSave = () => {
-    window.alert("Save lands in a follow-up commit.");
+    downloadMapFile("wargame-map.json", workingMap);
+    // Once the player has a copy on disk, treat the draft as "saved" so
+    // a subsequent Load doesn't warn about unsaved edits.
+    seedRef.current = serializeWorkingMap(workingMap);
   };
+
   const handleLoad = () => {
-    window.alert("Load lands in a follow-up commit.");
+    loadInputRef.current?.click();
   };
+
+  const handleLoadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset so picking the same filename again re-fires onChange.
+    e.target.value = "";
+    if (!file) return;
+    const text = await file.text();
+    const parsed = parseWorkingMap(text);
+    if (!parsed) {
+      window.alert("Couldn't read map file — malformed JSON or missing required fields.");
+      return;
+    }
+    const hasUnsavedEdits = serializeWorkingMap(workingMap) !== seedRef.current;
+    if (hasUnsavedEdits && !window.confirm("Discard current draft and load this file?")) return;
+    setWorkingMap(parsed);
+    seedRef.current = serializeWorkingMap(parsed);
+    // Any in-progress tool draft is meaningless against the new map.
+    setPolygonDraft([]);
+    setWallDraft(undefined);
+    setHoveredTerrain(undefined);
+  };
+
   const handleApply = () => {
     window.alert("Apply lands in a follow-up commit.");
   };
@@ -220,6 +265,13 @@ export function MapEditor() {
         <div style={buttonColumnStyle}>
           <button type="button" onClick={handleSave} style={secondaryButtonStyle}>Save…</button>
           <button type="button" onClick={handleLoad} style={secondaryButtonStyle}>Load…</button>
+          <input
+            ref={loadInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: "none" }}
+            onChange={handleLoadFile}
+          />
           <button type="button" onClick={handleApply} style={primaryButtonStyle}>Apply</button>
           <button type="button" onClick={handleCancel} style={secondaryButtonStyle}>Cancel</button>
         </div>
@@ -264,6 +316,23 @@ export function MapEditor() {
 }
 
 type EditorTool = "polygon" | "wall" | "delete";
+
+/**
+ * Trigger a browser download of `wm` as a JSON file named `filename`.
+ * Pure DOM — no React, no state. Patterned on `ruleSetStorage.ts`'s
+ * downloadRuleSet so the two file-I/O paths look the same.
+ */
+function downloadMapFile(filename: string, wm: WorkingMap): void {
+  const blob = new Blob([serializeWorkingMap(wm)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

@@ -1,6 +1,6 @@
 # Feature: Map Editor (stage 1 — draw-direct)
 
-**Status:** Draft
+**Status:** Approved
 **Target Version:** v1
 **Owner:** Ryan
 **Last Updated:** 2026-05-16
@@ -168,6 +168,11 @@ Three radio-selected tools share the canvas:
 4. **Snap-to-grid is 1.0″** with no configurable grid size in v1.
 5. **Three tools only** in stage 1 — Polygon, Wall, Delete. No edit-existing-shape (move vertex, extend wall) — those are explicit out-of-scope.
 6. **Apply unconditionally restarts the game** rather than trying to migrate placed units. Cleaner than attempting partial preservation; matches the existing Restart game flow's invariant.
+7. **`Ctrl+Z` undo inside the editor.** Mid-shape it pops the last placed vertex; between shapes it removes the last committed shape. No redo, no history beyond one step is required — keep it simple.
+8. **Self-intersecting polygons are accepted silently.** Player-trust model — no validation, no warning. The vision-rule math may behave oddly on bowtie polygons; that's the player's problem to draw cleanly. Geometric validation can be added later if it bites in practice.
+9. **No upper bound on width / height** in v1. The input accepts any positive number; the rendered canvas will scroll / scale to fit. A practical cap can be added if oversized maps cause performance issues.
+10. **Bottom-left scale indicator stays visible** during editing — it's still useful for the player to see the rendered inch scale while drawing.
+11. **Edit map is only reachable from non-Transition phases.** The Game menu is already hidden during Transition (per `game-menu.md` §2.1), so no extra wiring is needed.
 
 ---
 
@@ -187,11 +192,7 @@ Three radio-selected tools share the canvas:
 
 ## 6. Open questions
 
-1. **Undo inside the editor.** Without it, a misclick on a polygon's third vertex means starting over. Worth a simple `Ctrl+Z` that pops the last placed vertex (mid-shape) or removes the last committed shape (between shapes)? Could be added if it's quick.
-2. **Self-intersecting polygons.** `pointInPolygon` and the ray-inside math may give weird results for bowtie polygons. Should the editor reject these on commit (geometric validation), or accept them and trust the player not to draw nonsense? I'd lean accept-and-warn (faster to ship); a hard reject can come later if it bites in practice.
-3. **Map width / height bounds.** Lower bound is "positive number." Is there a practical upper bound (e.g., 200″ x 200″)? Beyond some size the rendered map becomes unwieldy at default zoom.
-4. **What happens to the bottom-left scale indicator** while editing? Probably stays — it's still useful — but worth confirming.
-5. **Should Edit map work during a Transition screen?** Today the Game menu is hidden on Transition (and so is the info menu). If a player needs to edit between turns, the menu would have to be visible somewhere. v1 default: no special handling, Edit map only reachable from non-Transition phases.
+*None outstanding — all 5 questions answered into §4 decisions 7–11.*
 
 ---
 

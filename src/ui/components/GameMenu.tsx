@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useGameContext } from "../hooks/useGameContext.js";
+import { useMapEditorContext } from "../hooks/useMapEditorContext.js";
 import { theme } from "../theme.js";
 import { DebugPanel } from "./DebugPanel.js";
 import { RulesEditor } from "./RulesEditor.js";
@@ -18,6 +19,7 @@ import { RulesEditor } from "./RulesEditor.js";
  */
 export function GameMenu() {
   const { game, reset } = useGameContext();
+  const { open: openMapEditor, isOpen: isMapEditorOpen } = useMapEditorContext();
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<View>("root");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -52,13 +54,21 @@ export function GameMenu() {
     return () => window.removeEventListener("mousedown", onMouseDown);
   }, [isOpen]);
 
+  // Hidden during Transition and while the map editor owns the view —
+  // both screens have their own chrome and shouldn't be cluttered.
   if (game.state.phase === "Transition") return null;
+  if (isMapEditorOpen) return null;
 
   const handleRestart = () => {
     close();
     if (window.confirm("Restart game? All units and turn progress will be lost.")) {
       reset();
     }
+  };
+
+  const handleEditMap = () => {
+    close();
+    openMapEditor();
   };
 
   const placeholderAlert = (label: string) => {
@@ -82,7 +92,7 @@ export function GameMenu() {
           {view === "root" && (
             <>
               <MenuItem onClick={handleRestart}>Restart game</MenuItem>
-              <MenuItem onClick={() => placeholderAlert("Map editing")}>Edit map</MenuItem>
+              <MenuItem onClick={handleEditMap}>Edit map</MenuItem>
               <MenuItem onClick={() => placeholderAlert("Save / Load games")}>Load game</MenuItem>
               <MenuItem onClick={() => setView("vision")}>Adjust Vision Rules ▸</MenuItem>
               <MenuItem onClick={() => setView("debug")}>Debug options ▸</MenuItem>

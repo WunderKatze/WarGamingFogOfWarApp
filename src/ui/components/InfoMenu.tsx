@@ -12,6 +12,7 @@ import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { buildSidc } from "../canvas/sidc.js";
 import { useGameContext } from "../hooks/useGameContext.js";
+import { useMapEditorContext } from "../hooks/useMapEditorContext.js";
 import { useRulesContext } from "../hooks/useRulesContext.js";
 import { useSelectionContext, type TerrainHit } from "../hooks/useSelectionContext.js";
 import type { Dispatch } from "../hooks/useGame.js";
@@ -45,11 +46,13 @@ export function InfoMenu() {
   // (terrainCatalog getters, getStealthAtPosition) pull from getRules() on
   // each render.
   useRulesContext();
+  const { isOpen: isMapEditorOpen } = useMapEditorContext();
   const active = game.state.getActivePlayer();
 
-  // The Transition screen is a full-bleed "next player, get ready" view that
-  // owns its own UI; the info menu doesn't belong there.
+  // The Transition screen and the map editor are full-takeover views that
+  // own their own UI; the info menu doesn't belong on either.
   if (game.state.phase === "Transition") return null;
+  if (isMapEditorOpen) return null;
 
   const lockedUnit = selectedUnitId ? game.state.getUnitById(selectedUnitId) : undefined;
   const hoveredUnit = hoveredUnitId ? game.state.getUnitById(hoveredUnitId) : undefined;

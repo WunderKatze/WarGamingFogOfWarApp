@@ -3,9 +3,11 @@ import { TerrainPolygon } from "../core/map/TerrainPolygon.js";
 import { TerrainWall } from "../core/map/TerrainWall.js";
 import { GameMenu } from "./components/GameMenu.js";
 import { InfoMenu } from "./components/InfoMenu.js";
+import { MapEditor } from "./components/MapEditor.js";
 import { DebugProvider } from "./hooks/useDebugContext.js";
 import { useGame } from "./hooks/useGame.js";
 import { GameProvider, useGameContext } from "./hooks/useGameContext.js";
+import { MapEditorProvider, useMapEditorContext } from "./hooks/useMapEditorContext.js";
 import { RulesProvider } from "./hooks/useRulesContext.js";
 import { SelectionProvider } from "./hooks/useSelectionContext.js";
 import { theme } from "./theme.js";
@@ -66,12 +68,14 @@ export function App() {
     <GameProvider value={{ game, dispatch, reset }}>
       <RulesProvider>
         <DebugProvider>
-          <SelectionProvider>
-            <Header />
-            <PhaseRouter />
-            <InfoMenu />
-            <GameMenu />
-          </SelectionProvider>
+          <MapEditorProvider>
+            <SelectionProvider>
+              <Header />
+              <ViewRouter />
+              <InfoMenu />
+              <GameMenu />
+            </SelectionProvider>
+          </MapEditorProvider>
         </DebugProvider>
       </RulesProvider>
     </GameProvider>
@@ -109,8 +113,15 @@ function Header() {
   );
 }
 
-function PhaseRouter() {
+/**
+ * Renders the main view area. The map editor takes priority over the
+ * phase view when it's open — see `useMapEditorContext` and
+ * `docs/features/map-editor.md` §7.1.
+ */
+function ViewRouter() {
   const { game } = useGameContext();
+  const { isOpen: isEditorOpen } = useMapEditorContext();
+  if (isEditorOpen) return <MapEditor />;
   switch (game.state.phase) {
     case "Deploy":
       return <DeploymentView />;

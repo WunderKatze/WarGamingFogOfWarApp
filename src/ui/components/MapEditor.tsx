@@ -29,7 +29,7 @@ import { theme } from "../theme.js";
  * See `docs/features/map-editor.md`.
  */
 export function MapEditor() {
-  const { game } = useGameContext();
+  const { game, resetWith } = useGameContext();
   const { close } = useMapEditorContext();
 
   // Seed the working draft from the current game's map on mount. Local
@@ -57,6 +57,12 @@ export function MapEditor() {
   // Monotonic counter for generating unique terrain ids when we commit
   // a new shape from the editor.
   const nextIdRef = useRef(1);
+  // Ordered history of commits the player made via the tools. Undo pops
+  // from this stack to remove the most recent shape. Delete-tool
+  // removals also strip the matching entry so undo doesn't try to
+  // remove a shape that's no longer there. Tool-prefix is included
+  // because polygons and walls live in separate arrays.
+  const commitHistoryRef = useRef<{ kind: "polygon" | "wall"; id: string }[]>([]);
   // Hidden file picker for Load. Click()'d programmatically from the
   // Load… button so we don't need to render a styled file input.
   const loadInputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +107,7 @@ export function MapEditor() {
         { id, terrainType: polygonType, vertices: [...polygonDraft] },
       ],
     }));
+    commitHistoryRef.current.push({ kind: "polygon", id });
     setPolygonDraft([]);
   };
 
@@ -117,21 +124,53 @@ export function MapEditor() {
       ...wm,
       walls: [...wm.walls, { id, from, to, wallType }],
     }));
+    commitHistoryRef.current.push({ kind: "wall", id });
     setWallDraft(undefined);
   };
 
   const deleteHovered = () => {
     if (!hoveredTerrain) return;
-    if (hoveredTerrain.kind === "polygon") {
-      const id = hoveredTerrain.polygon.id;
+    const kind = hoveredTerrain.kind;
+    const id = kind === "polygon" ? hoveredTerrain.polygon.id : hoveredTerrain.wall.id;
+    if (kind === "polygon") {
       setWorkingMap((wm) => ({ ...wm, polygons: wm.polygons.filter((p) => p.id !== id) }));
     } else {
-      const id = hoveredTerrain.wall.id;
       setWorkingMap((wm) => ({ ...wm, walls: wm.walls.filter((w) => w.id !== id) }));
     }
+    // Strip the matching history entry so a later undo doesn't try to
+    // remove a shape that's no longer present (silent no-op would
+    // confuse the player).
+    commitHistoryRef.current = commitHistoryRef.current.filter(
+      (h) => !(h.kind === kind && h.id === id),
+    );
     // The hovered shape is gone; clear so the highlight doesn't linger
     // on a now-removed id until the cursor moves to a new shape.
     setHoveredTerrain(undefined);
+  };
+
+  /**
+   * Ctrl+Z handler. Priority:
+   *   1. Mid-polygon-draft → pop the last placed vertex.
+   *   2. Mid-wall-draft → cancel the first click.
+   *   3. Otherwise → remove the most-recently-committed shape.
+   * No redo. Delete-tool removals aren't restored.
+   */
+  const undo = () => {
+    if (polygonDraft.length > 0) {
+      setPolygonDraft((draft) => draft.slice(0, -1));
+      return;
+    }
+    if (wallDraft) {
+      setWallDraft(undefined);
+      return;
+    }
+    const last = commitHistoryRef.current.pop();
+    if (!last) return;
+    if (last.kind === "polygon") {
+      setWorkingMap((wm) => ({ ...wm, polygons: wm.polygons.filter((p) => p.id !== last.id) }));
+    } else {
+      setWorkingMap((wm) => ({ ...wm, walls: wm.walls.filter((w) => w.id !== last.id) }));
+    }
   };
 
   const handleMapClick = (position: Point) => {
@@ -166,7 +205,10 @@ export function MapEditor() {
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
         return;
       }
-      if (e.key === "Enter") {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (e.key === "Enter") {
         e.preventDefault();
         commitPolygon();
       } else if (e.key === "Escape") {
@@ -178,7 +220,7 @@ export function MapEditor() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polygonDraft, polygonType, snapToGrid]);
+  }, [polygonDraft, polygonType, wallDraft, snapToGrid]);
 
   const handleCancel = () => {
     // TODO (Ctrl+Z + Apply / Save / Load checkpoints): if the draft has
@@ -216,10 +258,25 @@ export function MapEditor() {
     setPolygonDraft([]);
     setWallDraft(undefined);
     setHoveredTerrain(undefined);
+    // The loaded shapes weren't committed by this editor session, so
+    // their ids don't appear in the history stack — wipe it so undo
+    // doesn't fish around for stale entries.
+    commitHistoryRef.current = [];
   };
 
   const handleApply = () => {
-    window.alert("Apply lands in a follow-up commit.");
+    if (
+      !window.confirm(
+        "Apply this map? The current game will restart and any in-progress unit placements will be lost.",
+      )
+    ) {
+      return;
+    }
+    // Hand the freshly-built GameMap to the game alongside the existing
+    // player set. resetWith constructs a fresh Game (Deploy phase,
+    // empty vision state) — same flow as Restart, but with the new map.
+    resetWith({ map: toGameMap(workingMap), players: game.state.players });
+    close();
   };
 
   return (

@@ -34,7 +34,17 @@ export function useGame(initFactory: () => GameStateInit) {
     setVersion((v) => v + 1);
   }, []);
 
-  return { game, dispatch, reset };
+  /**
+   * Start a fresh Game from an explicit init instead of the mount-time
+   * factory. Used by the map editor's Apply path so the new game uses
+   * the edited map while keeping the same player set.
+   */
+  const resetWith = useCallback((init: GameStateInit) => {
+    setGame(new Game(init));
+    setVersion((v) => v + 1);
+  }, []);
+
+  return { game, dispatch, reset, resetWith };
 }
 
 export type Dispatch = ReturnType<typeof useGame>["dispatch"];

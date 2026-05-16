@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { Game } from "../../core/Game.js";
+import type { GameStateInit } from "../../core/GameState.js";
 import type { Dispatch } from "./useGame.js";
 
 interface GameContextValue {
@@ -7,6 +8,8 @@ interface GameContextValue {
   dispatch: Dispatch;
   /** Discards the current Game and starts a fresh one from initial state. */
   reset: () => void;
+  /** Like reset, but uses the given init (e.g. a freshly-edited map). */
+  resetWith: (init: GameStateInit) => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);

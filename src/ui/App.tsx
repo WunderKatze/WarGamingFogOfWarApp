@@ -59,13 +59,13 @@ function buildDemoMap(): GameMap {
 }
 
 export function App() {
-  const { game, dispatch, reset } = useGame(() => ({
+  const { game, dispatch, reset, resetWith } = useGame(() => ({
     map: buildDemoMap(),
     players: ["A", "B"],
   }));
 
   return (
-    <GameProvider value={{ game, dispatch, reset }}>
+    <GameProvider value={{ game, dispatch, reset, resetWith }}>
       <RulesProvider>
         <DebugProvider>
           <MapEditorProvider>

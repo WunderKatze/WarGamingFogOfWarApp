@@ -1,4 +1,4 @@
-import { dugInStealthModifier } from "../config.js";
+import { getRules } from "../rules.js";
 import { Unit, type UnitInit } from "./Unit.js";
 
 export interface InfantryInit extends UnitInit {
@@ -24,6 +24,6 @@ export class Infantry extends Unit {
   }
 
   override getInherentConcealmentModifier(): number {
-    return this._dugIn ? dugInStealthModifier : 1;
+    return this._dugIn ? getRules().dugInStealthModifier : 1;
   }
 }

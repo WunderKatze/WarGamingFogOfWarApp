@@ -1,4 +1,4 @@
-import { modifierEffects, unitTypeStats } from "../config.js";
+import { getRules } from "../rules.js";
 import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "../types.js";
 
 export interface UnitInit {
@@ -43,8 +43,9 @@ export abstract class Unit {
   }
 
   getVision(): number {
-    const base = unitTypeStats[this.type].baseVision;
-    const mult = this.hasModifier("Recon") ? modifierEffects.Recon.visionMultiplier : 1;
+    const rules = getRules();
+    const base = rules.unitTypeStats[this.type].baseVision;
+    const mult = this.hasModifier("Recon") ? rules.modifierEffects.Recon.visionMultiplier : 1;
     return base * mult;
   }
 
@@ -54,8 +55,9 @@ export abstract class Unit {
    * by VisionCalculator because only the single highest of those applies.
    */
   getIntrinsicStealth(): number {
-    const base = unitTypeStats[this.type].baseStealth;
-    const mult = this.hasModifier("Recon") ? modifierEffects.Recon.stealthMultiplier : 1;
+    const rules = getRules();
+    const base = rules.unitTypeStats[this.type].baseStealth;
+    const mult = this.hasModifier("Recon") ? rules.modifierEffects.Recon.stealthMultiplier : 1;
     return base * mult;
   }
 

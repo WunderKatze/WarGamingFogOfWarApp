@@ -1,8 +1,4 @@
-import {
-  polygonStealthModifier,
-  shortWallStealthModifier,
-  tallWoodsRayThroughLimit,
-} from "../config.js";
+import { getRules } from "../rules.js";
 import type { Point, PolygonTerrainType, WallType } from "../types.js";
 import {
   segmentEdgeIntersectionCount,
@@ -21,8 +17,9 @@ import type { TerrainWall } from "./TerrainWall.js";
  *     concealment.
  *
  * Adding a new terrain kind means writing one new entry — no other file
- * needs to switch on its name. Numeric tuning values live in `config.ts`;
- * the catalog references them so balance changes still happen in one spot.
+ * needs to switch on its name. Numeric tuning values live in `rules.ts`;
+ * the catalog reads them at call time (via getters and inside predicates)
+ * so a runtime rule change takes effect on the next read.
  *
  * The catalog is split into two halves (polygons, walls) because the
  * underlying geometric primitives differ: a polygon answers "ray length
@@ -70,8 +67,10 @@ export const polygonTerrainCatalog: Record<PolygonTerrainType, PolygonTerrainEnt
   Building: {
     kind: "Building",
     displayName: "Building",
-    stealthMultiplier: polygonStealthModifier.Building,
-    ruleDescription: `Multiplies stealth ×${polygonStealthModifier.Building} for units inside; blocks LOS that crosses two edges.`,
+    get stealthMultiplier() { return getRules().polygonStealthModifier.Building; },
+    get ruleDescription() {
+      return `Multiplies stealth ×${getRules().polygonStealthModifier.Building} for units inside; blocks LOS that crosses two edges.`;
+    },
     visual: { fill: "#9a9a9a", stroke: "#333", opacity: 0.7 },
     appliesAsConcealment(poly, _from, to) {
       return poly.containsPoint(to);
@@ -83,21 +82,26 @@ export const polygonTerrainCatalog: Record<PolygonTerrainType, PolygonTerrainEnt
   TallWoods: {
     kind: "TallWoods",
     displayName: "Tall Woods",
-    stealthMultiplier: polygonStealthModifier.TallWoods,
-    ruleDescription: `Multiplies stealth ×${polygonStealthModifier.TallWoods} when LOS passes through; blocks LOS past ${tallWoodsRayThroughLimit}″ inside.`,
+    get stealthMultiplier() { return getRules().polygonStealthModifier.TallWoods; },
+    get ruleDescription() {
+      const rules = getRules();
+      return `Multiplies stealth ×${rules.polygonStealthModifier.TallWoods} when LOS passes through; blocks LOS past ${rules.tallWoodsRayThroughLimit}″ inside.`;
+    },
     visual: { fill: "#2d5e2d", stroke: "#333", opacity: 0.7 },
     appliesAsConcealment(poly, from, to) {
       return segmentLengthInsidePolygon(from, to, poly.vertices) > 0;
     },
     blocksRay(poly, from, to) {
-      return segmentLengthInsidePolygon(from, to, poly.vertices) > tallWoodsRayThroughLimit;
+      return segmentLengthInsidePolygon(from, to, poly.vertices) > getRules().tallWoodsRayThroughLimit;
     },
   },
   ShortTerrain: {
     kind: "ShortTerrain",
     displayName: "Short Terrain",
-    stealthMultiplier: polygonStealthModifier.ShortTerrain,
-    ruleDescription: `Multiplies stealth ×${polygonStealthModifier.ShortTerrain} when LOS passes through.`,
+    get stealthMultiplier() { return getRules().polygonStealthModifier.ShortTerrain; },
+    get ruleDescription() {
+      return `Multiplies stealth ×${getRules().polygonStealthModifier.ShortTerrain} when LOS passes through.`;
+    },
     visual: { fill: "#a8c870", stroke: "#333", opacity: 0.7 },
     appliesAsConcealment(poly, from, to) {
       return segmentLengthInsidePolygon(from, to, poly.vertices) > 0;
@@ -112,8 +116,10 @@ export const wallTerrainCatalog: Record<WallType, WallTerrainEntry> = {
   Short: {
     kind: "Short",
     displayName: "Short Wall",
-    stealthMultiplier: shortWallStealthModifier,
-    ruleDescription: `Multiplies stealth ×${shortWallStealthModifier} when LOS crosses it; doesn't block sight.`,
+    get stealthMultiplier() { return getRules().shortWallStealthModifier; },
+    get ruleDescription() {
+      return `Multiplies stealth ×${getRules().shortWallStealthModifier} when LOS crosses it; doesn't block sight.`;
+    },
     visual: { stroke: "#777", strokeWidth: 3 },
     appliesAsConcealment(wall, from, to) {
       return segmentIntersection(from, to, wall.from, wall.to) !== null;

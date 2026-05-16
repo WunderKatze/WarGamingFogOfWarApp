@@ -223,8 +223,8 @@ export function MapEditor() {
   }, [polygonDraft, polygonType, wallDraft, snapToGrid]);
 
   const handleCancel = () => {
-    // TODO (Ctrl+Z + Apply / Save / Load checkpoints): if the draft has
-    // unsaved edits, confirm-before-discard. For now Close is silent.
+    const hasUnsavedEdits = serializeWorkingMap(workingMap) !== seedRef.current;
+    if (hasUnsavedEdits && !window.confirm("Discard edits?")) return;
     close();
   };
 

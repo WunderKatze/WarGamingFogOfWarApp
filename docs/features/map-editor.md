@@ -1,6 +1,6 @@
 # Feature: Map Editor (stage 1 — draw-direct)
 
-**Status:** Approved
+**Status:** Complete
 **Target Version:** v1
 **Owner:** Ryan
 **Last Updated:** 2026-05-16
@@ -35,11 +35,10 @@ The requirements doc (§3.1) describes two workflows:
 ### 2.1 Entering and exiting the editor
 
 - The Game menu's **Edit map** item opens the editor (replacing today's "comes in a later release" placeholder).
-- The editor takes over the main view area (same slot the phase views render into). The Header and the Game menu button remain visible; the info menu hides while editing.
+- The editor takes over the main view area (same slot the phase views render into). The Header stays; both the Game menu button and the info menu hide while editing — they own their own chrome and would clutter the editor's sidebar / canvas layout. The editor's Cancel button is the only exit, mirroring the discard-on-cancel pattern.
 - The editor opens with a snapshot of the **current game's map** prefilled. Edits are made against a working draft, not against the live map directly.
 - An **Apply** button writes the working draft back into the game. Because changing map dimensions or removing terrain can invalidate already-placed unit positions, applying always **restarts the game** (with confirm dialog).
-- A **Cancel** button discards the working draft and returns to the game with the old map intact.
-- An **Exit (back to game)** button is the same as Cancel — both surface the discard-on-cancel pattern.
+- A **Cancel** button discards the working draft and returns to the game with the old map intact. If the draft differs from what was opened or last saved, Cancel confirms before discarding.
 
 ### 2.2 Editor layout
 
@@ -147,14 +146,14 @@ Three radio-selected tools share the canvas:
 | Open editor mid-game (Move / FireDeclare) | Editor opens; working draft is a copy of current map. No game state changes until Apply. Cancel preserves the game. |
 | Open editor, make changes, click Cancel | Confirm: "Discard edits?" → yes returns to game with original map; no keeps editing. |
 | Apply when no edits were made | Still triggers restart-with-confirm (Apply is unconditional). Could short-circuit to a no-op later. |
-| Width / height reduced so existing terrain falls outside the new rect | On Apply, the bounding rect is the new dimensions; out-of-bounds terrain is kept in the saved map (so widening later restores them) but isn't rendered when the rect is smaller. |
+| Width / height reduced so existing terrain falls outside the new rect | On Apply, the bounding rect is the new dimensions; out-of-bounds terrain is kept in the saved map (so widening later restores them) and still renders visually past the rect in stage 1 — Konva doesn't clip to the map background. Adding a clipping mask is a stage-2 polish item. |
 | Polygon tool: user drops 1 or 2 vertices then presses Enter | Enter is a no-op below 3 vertices. Escape still cancels. |
 | Polygon tool: vertices form a self-intersecting polygon | Committed as-drawn. The vision-rule polygon math may behave oddly — flagged as known limitation (see §6 open questions). |
 | Wall tool: first click placed, then tool switched before second click | The in-progress wall is discarded silently. |
 | Delete tool: cursor between two overlapping polygons | Targets the topmost (last-drawn) one, mirroring the info-menu hover convention. |
 | Snap toggled OFF mid-drawing | The in-progress shape keeps the snapped vertices it already has; new vertices are unsnapped. |
 | Load a JSON map file with malformed shape | Error alert: "Couldn't read map file — malformed JSON or missing required fields." Working draft is unchanged. |
-| Load a JSON map file with a newer schema (extra keys) | Unknown top-level keys ignored; known keys loaded. Missing keys fall back to current draft values (no destructive default merge). |
+| Load a JSON map file with a newer schema (extra keys) | Unknown top-level keys are ignored. A missing *required* key (width / height / polygons / walls) triggers the malformed-file alert rather than silently filling in defaults — safer than overwriting half the draft with zeros. Future *optional* keys can introduce per-field fallback policy as they're added. |
 | Browser refresh while editing | Editor state is lost (no auto-save). Live game state is also lost — same as today. |
 | Apply with a 0-polygon, 0-wall map | Allowed. The game restarts on a blank rectangle. |
 

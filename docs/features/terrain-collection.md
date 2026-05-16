@@ -1,16 +1,16 @@
 # Feature: Terrain Collection
 
 **Status:** Draft (parked)
-**Target Version:** v1
+**Target Version:** v2
 **Owner:** Ryan
 **Last Updated:** 2026-05-16
 
-> **Status note.** This doc is being parked in Draft while the simpler
-> `map-editor.md` stage-1 (draw-direct) ships first to unblock tabletop
-> use today. The Collection model below is the *intended* v1 design and
-> will eventually replace the draw-direct flow — stage 1 is the
-> deliberately-disposable quick-ship that gets a map onto a table for
-> this weekend's game. Pick this back up after stage 1 lands.
+> **Status note.** Retagged from v1 to v2 as part of the V1 timeline push-up:
+> V1 now ships the smaller polish items needed for tabletop playability,
+> with this richer terrain-collection model as the V2 successor to
+> `map-editor.md` stage-1 (draw-direct). Stage 1 is the v1 mapping
+> solution; the Collection model below replaces it in v2. Pick this back
+> up after V1 ships.
 
 ---
 

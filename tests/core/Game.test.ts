@@ -365,3 +365,58 @@ describe("Game — end-to-end happy path", () => {
     expect(g.state.getActivePlayer()).toBe("A");
   });
 });
+
+describe("Game — rules-changed flag", () => {
+  it("rulesChangedThisTurn defaults to false on a new game", () => {
+    const g = makeGame();
+    expect(g.state.rulesChangedThisTurn).toBe(false);
+  });
+
+  it("markRulesChanged sets the flag to true", () => {
+    const g = makeGame();
+    g.markRulesChanged();
+    expect(g.state.rulesChangedThisTurn).toBe(true);
+  });
+
+  it("markRulesChanged is idempotent", () => {
+    const g = makeGame();
+    g.markRulesChanged();
+    g.markRulesChanged();
+    expect(g.state.rulesChangedThisTurn).toBe(true);
+  });
+
+  it("startTurn clears the flag (so the next player's turn starts fresh)", () => {
+    const g = makeGame();
+    g.deployUnit({ type: "Infantry", name: "A1", position: p(10, 10) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Infantry", name: "B1", position: p(20, 20) });
+    g.endDeployment();
+    g.markRulesChanged();
+    expect(g.state.rulesChangedThisTurn).toBe(true);
+    g.startTurn();
+    expect(g.state.rulesChangedThisTurn).toBe(false);
+  });
+
+  it("markRulesChanged works in any phase (Deploy, Move, FireDeclare)", () => {
+    const g = makeGame();
+    expect(g.state.phase).toBe("Deploy");
+    g.markRulesChanged();
+    expect(g.state.rulesChangedThisTurn).toBe(true);
+
+    g.deployUnit({ type: "Infantry", name: "A1", position: p(10, 10) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Infantry", name: "B1", position: p(20, 20) });
+    g.endDeployment();
+    g.startTurn();
+    expect(g.state.phase).toBe("Move");
+    g.markRulesChanged();
+    expect(g.state.rulesChangedThisTurn).toBe(true);
+
+    g.endMove();
+    expect(g.state.phase).toBe("FireDeclare");
+    g.markRulesChanged();
+    expect(g.state.rulesChangedThisTurn).toBe(true);
+  });
+});

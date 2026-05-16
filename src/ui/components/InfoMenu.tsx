@@ -1,17 +1,18 @@
 import ms from "milsymbol";
 import { useMemo, type CSSProperties } from "react";
-import { dugInStealthModifier } from "../../core/config.js";
 import type { Game } from "../../core/Game.js";
 import type { GameMap } from "../../core/map/GameMap.js";
 import {
   polygonTerrainCatalog,
   wallTerrainCatalog,
 } from "../../core/map/terrainCatalog.js";
+import { getRules } from "../../core/rules.js";
 import type { Point, TeamId } from "../../core/types.js";
 import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { buildSidc } from "../canvas/sidc.js";
 import { useGameContext } from "../hooks/useGameContext.js";
+import { useRulesContext } from "../hooks/useRulesContext.js";
 import { useSelectionContext, type TerrainHit } from "../hooks/useSelectionContext.js";
 import type { Dispatch } from "../hooks/useGame.js";
 import { theme } from "../theme.js";
@@ -38,6 +39,12 @@ export function InfoMenu() {
     cursorOnMap,
     previewPositionOverride,
   } = useSelectionContext();
+  // Subscribe to rule changes so terrain-stealth and unit-stealth displays
+  // refresh live when the player tweaks values in the Adjust Vision Rules
+  // editor. We don't need the returned value directly here — the read sites
+  // (terrainCatalog getters, getStealthAtPosition) pull from getRules() on
+  // each render.
+  useRulesContext();
   const active = game.state.getActivePlayer();
 
   // The Transition screen is a full-bleed "next player, get ready" view that
@@ -217,7 +224,7 @@ function getStealthAtPosition(unit: Unit, position: Point, map: GameMap): Stealt
     // is derived from the well-known dugInStealthModifier value rather than
     // an instance check. When another inherent source is added, this can
     // promote to a virtual on Unit.
-    candidates.push({ mod: inherent, label: inherent === dugInStealthModifier ? "dug in" : "inherent" });
+    candidates.push({ mod: inherent, label: inherent === getRules().dugInStealthModifier ? "dug in" : "inherent" });
   }
 
   for (const poly of map.polygons) {

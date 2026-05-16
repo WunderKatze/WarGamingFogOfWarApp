@@ -73,6 +73,10 @@ export class Game {
    */
   startTurn(): void {
     this.requirePhase("Transition");
+    // Cross-turn notices (vision-rules-changed, future debug-used) are read
+    // by TransitionView and consumed here so they don't bleed into the next
+    // player's turn.
+    this.state.rulesChangedThisTurn = false;
     if (!this.state.isDeploymentComplete()) {
       this.state.phase = "Deploy";
       return;
@@ -194,6 +198,18 @@ export class Game {
     this.state.firedThisTurn = new Set();
     this.state.activePlayerIndex = this.state.getNextPlayerIndex();
     this.state.phase = "Transition";
+  }
+
+  /**
+   * Records that a vision-rule value was changed during this turn so the
+   * next player's Transition screen can show a notice. Idempotent — flipping
+   * the flag back to true after it's already true is a no-op. Called by the
+   * UI's RulesProvider whenever it dispatches a rule edit. Independent of
+   * phase: rule changes during Deploy / Move / FireDeclare all surface on
+   * the same next-Transition.
+   */
+  markRulesChanged(): void {
+    this.state.rulesChangedThisTurn = true;
   }
 
   // --- Internals ---

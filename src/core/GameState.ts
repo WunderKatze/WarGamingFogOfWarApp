@@ -63,6 +63,14 @@ export class GameState {
    */
   moveHistory: MoveHistoryEntry[] = [];
 
+  /**
+   * Set when any vision-rule value mutated during the active player's turn.
+   * Drives the "Vision Rules changed this turn" notice on the next player's
+   * Transition screen, then cleared by `startTurn`. See feature
+   * docs/features/game-menu.md.
+   */
+  rulesChangedThisTurn = false;
+
   constructor(init: GameStateInit) {
     if (init.players.length < 2) {
       throw new Error("GameState requires at least 2 players");

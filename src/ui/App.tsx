@@ -5,6 +5,7 @@ import { GameMenu } from "./components/GameMenu.js";
 import { InfoMenu } from "./components/InfoMenu.js";
 import { useGame } from "./hooks/useGame.js";
 import { GameProvider, useGameContext } from "./hooks/useGameContext.js";
+import { RulesProvider } from "./hooks/useRulesContext.js";
 import { SelectionProvider } from "./hooks/useSelectionContext.js";
 import { theme } from "./theme.js";
 import { DeploymentView } from "./views/DeploymentView.js";
@@ -62,12 +63,14 @@ export function App() {
 
   return (
     <GameProvider value={{ game, dispatch, reset }}>
-      <SelectionProvider>
-        <Header />
-        <PhaseRouter />
-        <InfoMenu />
-        <GameMenu />
-      </SelectionProvider>
+      <RulesProvider>
+        <SelectionProvider>
+          <Header />
+          <PhaseRouter />
+          <InfoMenu />
+          <GameMenu />
+        </SelectionProvider>
+      </RulesProvider>
     </GameProvider>
   );
 }

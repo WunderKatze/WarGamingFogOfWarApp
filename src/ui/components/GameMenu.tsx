@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { theme } from "../theme.js";
+import { RulesEditor } from "./RulesEditor.js";
 
 /**
  * Top-right dropdown that consolidates app-level affordances: Restart,
@@ -88,7 +89,7 @@ export function GameMenu() {
           )}
           {view === "vision" && (
             <SubPanel title="Adjust Vision Rules" onBack={() => setView("root")}>
-              <p style={comingSoonStyle}>(Editor lands in the next commit.)</p>
+              <RulesEditor />
             </SubPanel>
           )}
           {view === "debug" && (

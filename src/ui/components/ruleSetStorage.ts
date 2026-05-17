@@ -97,6 +97,14 @@ export function validateRules(raw: unknown): Rules | null {
       typeof o.tallWoodsRayThroughLimit === "number"
         ? o.tallWoodsRayThroughLimit
         : defaultRules.tallWoodsRayThroughLimit,
+    terrainEdgeGraceDistance:
+      typeof o.terrainEdgeGraceDistance === "number"
+        ? o.terrainEdgeGraceDistance
+        : defaultRules.terrainEdgeGraceDistance,
+    goneToGroundStealthModifier:
+      typeof o.goneToGroundStealthModifier === "number"
+        ? o.goneToGroundStealthModifier
+        : defaultRules.goneToGroundStealthModifier,
   };
 }
 

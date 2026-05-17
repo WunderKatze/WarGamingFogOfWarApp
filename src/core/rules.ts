@@ -1,9 +1,11 @@
 import {
   dugInStealthModifier as defaultDugInStealthModifier,
+  goneToGroundStealthModifier as defaultGoneToGroundStealthModifier,
   modifierEffects as defaultModifierEffects,
   polygonStealthModifier as defaultPolygonStealthModifier,
   shortWallStealthModifier as defaultShortWallStealthModifier,
   tallWoodsRayThroughLimit as defaultTallWoodsRayThroughLimit,
+  terrainEdgeGraceDistance as defaultTerrainEdgeGraceDistance,
   unitTypeStats as defaultUnitTypeStats,
   type ModifierEffects,
   type UnitTypeStats,
@@ -33,6 +35,10 @@ export interface Rules {
   polygonStealthModifier: Record<PolygonTerrainType, number>;
   shortWallStealthModifier: number;
   tallWoodsRayThroughLimit: number;
+  /** §2.2 of vision-rules-tweaks: inches near the inner edge that don't trigger the woods/short-terrain stealth penalty. */
+  terrainEdgeGraceDistance: number;
+  /** §2.3 of vision-rules-tweaks: stacking multiplier for units in cover that didn't move or fire last turn. */
+  goneToGroundStealthModifier: number;
 }
 
 export const defaultRules: Rules = Object.freeze({
@@ -42,6 +48,8 @@ export const defaultRules: Rules = Object.freeze({
   polygonStealthModifier: structuredClone(defaultPolygonStealthModifier),
   shortWallStealthModifier: defaultShortWallStealthModifier,
   tallWoodsRayThroughLimit: defaultTallWoodsRayThroughLimit,
+  terrainEdgeGraceDistance: defaultTerrainEdgeGraceDistance,
+  goneToGroundStealthModifier: defaultGoneToGroundStealthModifier,
 });
 
 let currentRules: Rules = structuredClone(defaultRules);

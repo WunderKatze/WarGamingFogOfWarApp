@@ -359,6 +359,21 @@ export function RulesEditor() {
           value={rules.tallWoodsRayThroughLimit}
           onChange={(v) => setRules({ tallWoodsRayThroughLimit: v })}
         />
+        <NumberField
+          label="Woods / Short Terrain edge grace"
+          suffix={'"'}
+          value={rules.terrainEdgeGraceDistance}
+          onChange={(v) => setRules({ terrainEdgeGraceDistance: v })}
+        />
+      </Section>
+
+      <Section title="Gone to Ground">
+        <NumberField
+          label="Stealth multiplier (stacks)"
+          suffix="×"
+          value={rules.goneToGroundStealthModifier}
+          onChange={(v) => setRules({ goneToGroundStealthModifier: v })}
+        />
       </Section>
 
       <div style={footerStyle}>

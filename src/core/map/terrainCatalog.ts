@@ -85,11 +85,11 @@ export const polygonTerrainCatalog: Record<PolygonTerrainType, PolygonTerrainEnt
     get stealthMultiplier() { return getRules().polygonStealthModifier.TallWoods; },
     get ruleDescription() {
       const rules = getRules();
-      return `Multiplies stealth ×${rules.polygonStealthModifier.TallWoods} when LOS passes through; blocks LOS past ${rules.tallWoodsRayThroughLimit}″ inside.`;
+      return `Multiplies stealth ×${rules.polygonStealthModifier.TallWoods} when LOS passes through more than ${rules.terrainEdgeGraceDistance}″ inside; blocks LOS past ${rules.tallWoodsRayThroughLimit}″ inside.`;
     },
     visual: { fill: "#2d5e2d", stroke: "#333", opacity: 0.7 },
     appliesAsConcealment(poly, from, to) {
-      return segmentLengthInsidePolygon(from, to, poly.vertices) > 0;
+      return segmentLengthInsidePolygon(from, to, poly.vertices) > getRules().terrainEdgeGraceDistance;
     },
     blocksRay(poly, from, to) {
       return segmentLengthInsidePolygon(from, to, poly.vertices) > getRules().tallWoodsRayThroughLimit;
@@ -100,11 +100,12 @@ export const polygonTerrainCatalog: Record<PolygonTerrainType, PolygonTerrainEnt
     displayName: "Short Terrain",
     get stealthMultiplier() { return getRules().polygonStealthModifier.ShortTerrain; },
     get ruleDescription() {
-      return `Multiplies stealth ×${getRules().polygonStealthModifier.ShortTerrain} when LOS passes through.`;
+      const rules = getRules();
+      return `Multiplies stealth ×${rules.polygonStealthModifier.ShortTerrain} when LOS passes through more than ${rules.terrainEdgeGraceDistance}″ inside.`;
     },
     visual: { fill: "#a8c870", stroke: "#333", opacity: 0.7 },
     appliesAsConcealment(poly, from, to) {
-      return segmentLengthInsidePolygon(from, to, poly.vertices) > 0;
+      return segmentLengthInsidePolygon(from, to, poly.vertices) > getRules().terrainEdgeGraceDistance;
     },
     blocksRay() {
       return false;

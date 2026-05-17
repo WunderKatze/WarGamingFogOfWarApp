@@ -151,4 +151,29 @@ describe("GameMap.getConcealmentModifiersAlongRay", () => {
     expect(mods).toContain(polygonStealthModifier.ShortTerrain);
     expect(mods).toContain(shortWallStealthModifier);
   });
+
+  it("Tall Woods grants no stealth when the ray's inside-portion is within the edge grace", () => {
+    // A 1.5"-wide strip; a ray going fully across has only 1.5" inside,
+    // which is below the default 2" grace.
+    const sliver = square("w", 40, 0, 1.5, 100, "TallWoods");
+    const map = new GameMap({ width: 100, height: 100, polygons: [sliver] });
+    expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(90, 50))).toEqual([]);
+  });
+
+  it("Short Terrain grants stealth when the ray's inside-portion exceeds the edge grace", () => {
+    // 5"-wide strip; ray inside-portion is 5", clearly > 2".
+    const strip = square("st", 40, 0, 5, 100, "ShortTerrain");
+    const map = new GameMap({ width: 100, height: 100, polygons: [strip] });
+    expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(90, 50)))
+      .toEqual([polygonStealthModifier.ShortTerrain]);
+  });
+
+  it("Building still contributes stealth without an edge grace (target-inside rule)", () => {
+    // Even a narrow building counts when the target is inside — the
+    // grace is woods/short-only, not buildings.
+    const tiny = square("b", 40, 49, 1, 2, "Building");
+    const map = new GameMap({ width: 100, height: 100, polygons: [tiny] });
+    expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(40.5, 50)))
+      .toEqual([polygonStealthModifier.Building]);
+  });
 });

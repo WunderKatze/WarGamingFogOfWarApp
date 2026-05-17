@@ -11,6 +11,7 @@ import { MapEditorProvider, useMapEditorContext } from "./hooks/useMapEditorCont
 import { RulesProvider } from "./hooks/useRulesContext.js";
 import { SelectionProvider } from "./hooks/useSelectionContext.js";
 import { theme } from "./theme.js";
+import { AddRemoveUnitsView } from "./views/AddRemoveUnitsView.js";
 import { DeploymentView } from "./views/DeploymentView.js";
 import { FireDeclareView } from "./views/FireDeclareView.js";
 import { MoveView } from "./views/MoveView.js";
@@ -82,6 +83,11 @@ export function App() {
   );
 }
 
+// Internal GamePhase ids that need a readable surface form. Phases not
+// listed here render their id verbatim.
+const phaseDisplay = (phase: string): string =>
+  phase === "AddRemoveUnits" ? "Add/Remove Units" : phase;
+
 function Header() {
   const { game } = useGameContext();
   const { phase, turnNumber } = game.state;
@@ -100,7 +106,7 @@ function Header() {
     >
       <strong>WarGaming Fog of War</strong>
       <span style={{ opacity: 0.6 }}>·</span>
-      <span>Phase: <strong>{phase}</strong></span>
+      <span>Phase: <strong>{phaseDisplay(phase)}</strong></span>
       <span style={{ opacity: 0.6 }}>·</span>
       <span>Active: <strong>Team {active}</strong></span>
       {turnNumber > 0 && (
@@ -127,6 +133,8 @@ function ViewRouter() {
       return <DeploymentView />;
     case "Transition":
       return <TransitionView />;
+    case "AddRemoveUnits":
+      return <AddRemoveUnitsView />;
     case "Move":
       return <MoveView />;
     case "FireDeclare":

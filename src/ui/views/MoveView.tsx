@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Game } from "../../core/Game.js";
-import type { Point, UnitId } from "../../core/types.js";
+import type { Point, UnitId, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
@@ -8,6 +8,8 @@ import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js
 import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
+
+const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battalion"];
 
 function getVisibleUnits(game: Game, showAllUnits: boolean): Unit[] {
   if (showAllUnits) return [...game.state.units];
@@ -50,11 +52,28 @@ export function MoveView() {
   const [shiftHeld, setShiftHeld] = useState(false);
   const [waypointToggle, setWaypointToggle] = useState(false);
 
+  // Pen for mid-Move unit creation (see docs/features/mid-game-roster.md
+  // §2.1). Placement is explicit: clicking the pen's Place button primes
+  // the next empty-map click for a createUnit call. We don't make every
+  // empty click an add, because empty clicks already commit moves /
+  // clear selection here — silent over-loading would surprise the
+  // player and accidentally spawn units while panning.
+  const [penType, setPenType] = useState<UnitType>("Infantry");
+  const [penSize, setPenSize] = useState<UnitSize>("Platoon");
+  const [penRecon, setPenRecon] = useState(false);
+  const [penDugIn, setPenDugIn] = useState(false);
+  const [penName, setPenName] = useState("");
+  const [addPrimed, setAddPrimed] = useState(false);
+
   const visible = getVisibleUnits(game, showAllUnits);
+  const ownUnits = game.state.units.filter((u) => u.teamId === active);
   const effectiveSelectedId = activeMove?.unitId ?? selectedUnitId;
   const selected = effectiveSelectedId ? game.state.getUnitById(effectiveSelectedId) : undefined;
+  const selectedOwn = selected && selected.teamId === active ? selected : undefined;
   const canUndo = game.state.moveHistory.length > 0;
   const waypointModeActive = shiftHeld || waypointToggle;
+
+  const autoName = (): string => `${penType[0]}-${ownUnits.length + 1}`;
 
   const startActiveMove = (unit: Unit) => {
     const origin = unit.getPosition();
@@ -90,9 +109,44 @@ export function MoveView() {
     startActiveMove(unit);
   };
 
+  const placeNewUnit = (position: Point) => {
+    const placedName = penName.trim() === "" ? autoName() : penName.trim();
+    dispatch((g) =>
+      g.createUnit({
+        type: penType,
+        name: placedName,
+        position,
+        size: penSize,
+        ...(penRecon && { modifiers: ["Recon"] }),
+        ...(penType === "Infantry" && { dugIn: penDugIn }),
+      }),
+    );
+    setPenName("");
+    setAddPrimed(false);
+  };
+
+  const handleDeleteSelected = () => {
+    if (!selectedOwn) return;
+    if (!window.confirm(`Delete ${selectedOwn.name}?`)) return;
+    const id = selectedOwn.id;
+    // Cancel any active move whose source unit we're about to delete so
+    // the preview overlay doesn't reference a unit that's gone.
+    if (activeMove && activeMove.unitId === id) setActiveMove(null);
+    dispatch((g) => g.deleteUnit(id));
+    setSelectedUnitId(undefined);
+  };
+
   const handleMapClick = (position: Point) => {
+    if (activeMove) {
+      // Active move: priming is silently ignored while the existing move
+      // is in progress — commit (or add waypoint) below.
+    } else if (addPrimed) {
+      // No active move + primed: this is a unit placement, not a deselect.
+      placeNewUnit(position);
+      return;
+    }
     if (!activeMove) {
-      // No active move: empty-map click clears info-menu selection.
+      // No active move and not primed: empty-map click clears info-menu selection.
       setSelectedUnitId(undefined);
       return;
     }
@@ -147,6 +201,7 @@ export function MoveView() {
       if (e.key === "Escape") {
         setActiveMove(null);
         setSelectedUnitId(undefined);
+        setAddPrimed(false);
         return;
       }
       // Ctrl+Z / Cmd+Z = undo. Shift+Ctrl+Z is conventionally redo — ignore it.
@@ -178,9 +233,80 @@ export function MoveView() {
   return (
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <Sidebar>
+        <SidebarSection title="Add Unit (Pen)">
+          <label style={penLabelStyle}>
+            <span>Name</span>
+            <input
+              type="text"
+              value={penName}
+              onChange={(e) => setPenName(e.target.value)}
+              placeholder="(optional)"
+              style={penTextInputStyle}
+            />
+          </label>
+          <label style={penLabelStyle}>
+            <span>Type</span>
+            <select
+              value={penType}
+              onChange={(e) => setPenType(e.target.value as UnitType)}
+              style={penSelectStyle}
+            >
+              <option value="Infantry">Infantry</option>
+              <option value="Tank">Tank</option>
+            </select>
+          </label>
+          <label style={penLabelStyle}>
+            <span>Size</span>
+            <select
+              value={penSize}
+              onChange={(e) => setPenSize(e.target.value as UnitSize)}
+              style={penSelectStyle}
+            >
+              {UNIT_SIZES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+          <label style={penCheckboxLabelStyle}>
+            <input
+              type="checkbox"
+              checked={penRecon}
+              onChange={(e) => setPenRecon(e.target.checked)}
+            />
+            Recon
+          </label>
+          <label style={{ ...penCheckboxLabelStyle, opacity: penType === "Infantry" ? 1 : 0.4 }}>
+            <input
+              type="checkbox"
+              checked={penDugIn}
+              disabled={penType !== "Infantry"}
+              onChange={(e) => setPenDugIn(e.target.checked)}
+            />
+            Dug-in (Infantry only)
+          </label>
+          {addPrimed ? (
+            <p style={primedHintStyle}>
+              Click empty map to place. Esc cancels.
+            </p>
+          ) : (
+            <div style={{ marginTop: 6 }}>
+              <SidebarButton variant="secondary" onClick={() => setAddPrimed(true)}>
+                Place new unit
+              </SidebarButton>
+            </div>
+          )}
+        </SidebarSection>
+
         <SidebarSection title="Move actions">
           {selected ? (
             <div style={{ fontSize: 13 }}>
+              {selectedOwn && (
+                <div style={{ marginBottom: 8 }}>
+                  <SidebarButton variant="secondary" onClick={handleDeleteSelected}>
+                    Delete unit
+                  </SidebarButton>
+                </div>
+              )}
               {game.state.moveHistory.some((e) => e.unitId === selected.id) && (
                 <div style={{ marginBottom: 8 }}>
                   <SidebarButton
@@ -282,6 +408,43 @@ const listStyle: React.CSSProperties = {
   padding: 0,
   listStyle: "none",
   fontSize: 12,
+};
+
+const penLabelStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 8,
+  fontSize: 13,
+};
+
+const penCheckboxLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  marginBottom: 6,
+  fontSize: 13,
+};
+
+const penSelectStyle: React.CSSProperties = {
+  padding: "2px 6px",
+  fontSize: 13,
+};
+
+const penTextInputStyle: React.CSSProperties = {
+  padding: "2px 6px",
+  fontSize: 13,
+  width: 120,
+};
+
+const primedHintStyle: React.CSSProperties = {
+  background: "#fef3c7",
+  border: "1px solid #f59e0b",
+  borderRadius: 3,
+  padding: "6px 8px",
+  margin: "6px 0 0 0",
+  fontSize: 12,
+  color: "#78350f",
 };
 
 const listItemStyle: React.CSSProperties = {

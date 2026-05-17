@@ -1,5 +1,5 @@
 import { GameState, type GamePhase, type GameStateInit } from "./GameState.js";
-import type { Modifier, Point, UnitId, UnitSize, UnitType } from "./types.js";
+import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "./types.js";
 import { Infantry } from "./units/Infantry.js";
 import { Tank } from "./units/Tank.js";
 import { Unit } from "./units/Unit.js";
@@ -65,6 +65,30 @@ export class Game {
   }
 
   // --- Transition ---
+
+  /**
+   * Records the player who goes first in the post-deployment "who-goes-first"
+   * screen. Phase stays Transition — the normal Start-Turn screen renders for
+   * the chosen player on the next render, giving a misclick a soft landing
+   * (the wrong team's Transition is just a Start-Turn prompt, no map shown).
+   * See docs/features/deployment-stop-gap.md §2.5.
+   */
+  chooseFirstPlayer(teamId: TeamId): void {
+    this.requirePhase("Transition");
+    if (!this.state.isDeploymentComplete()) {
+      throw new Error("chooseFirstPlayer: deployment not complete");
+    }
+    if (this.state.firstPlayerChosen) {
+      throw new Error("chooseFirstPlayer: first player already chosen");
+    }
+    if (this.state.turnNumber !== 0) {
+      throw new Error("chooseFirstPlayer: only valid before the first turn");
+    }
+    const idx = this.state.players.indexOf(teamId);
+    if (idx < 0) throw new Error(`chooseFirstPlayer: unknown team ${teamId}`);
+    this.state.activePlayerIndex = idx;
+    this.state.firstPlayerChosen = true;
+  }
 
   /**
    * Active player taps "Start Turn" from the Transition screen. Begins either

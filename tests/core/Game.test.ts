@@ -123,6 +123,41 @@ describe("Game — deployment flow", () => {
     expect(() => g.renameUnit(u.id, "   ")).toThrow(/cannot be empty/);
     expect(u.name).toBe("Old");
   });
+
+  it("chooseFirstPlayer sets active player and the firstPlayerChosen flag", () => {
+    const g = makeGame();
+    g.endDeployment(); g.startTurn();  // A done, B's deploy
+    g.endDeployment();                  // B done → Transition, deployment complete
+    expect(g.state.firstPlayerChosen).toBe(false);
+    g.chooseFirstPlayer("B");
+    expect(g.state.getActivePlayer()).toBe("B");
+    expect(g.state.firstPlayerChosen).toBe(true);
+    // Subsequent startTurn enters Move for B as turn 1.
+    g.startTurn();
+    expect(g.state.phase).toBe("Move");
+    expect(g.state.turnNumber).toBe(1);
+    expect(g.state.getActivePlayer()).toBe("B");
+  });
+
+  it("chooseFirstPlayer rejects a second call", () => {
+    const g = makeGame();
+    g.endDeployment(); g.startTurn(); g.endDeployment();
+    g.chooseFirstPlayer("A");
+    expect(() => g.chooseFirstPlayer("B")).toThrow(/already chosen/);
+  });
+
+  it("chooseFirstPlayer rejects an unknown team", () => {
+    const g = makeGame();
+    g.endDeployment(); g.startTurn(); g.endDeployment();
+    expect(() => g.chooseFirstPlayer("Z")).toThrow(/unknown team/);
+  });
+
+  it("chooseFirstPlayer rejects before deployment is complete", () => {
+    const g = makeGame();
+    g.endDeployment();
+    // Mid-deployment: phase is Transition but deployment isn't complete.
+    expect(() => g.chooseFirstPlayer("A")).toThrow(/deployment not complete/);
+  });
 });
 
 describe("Game — startTurn from Transition", () => {

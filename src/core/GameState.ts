@@ -57,6 +57,15 @@ export class GameState {
   deployedPlayers = new Set<TeamId>();
 
   /**
+   * Set true once the player who goes first has been chosen via
+   * `chooseFirstPlayer` (the post-deployment "who-goes-first" Transition
+   * variant per docs/features/deployment-stop-gap.md §2.5). Stays true
+   * for the rest of the game. Until set, the post-deployment Transition
+   * renders the selection buttons instead of Start Turn.
+   */
+  firstPlayerChosen = false;
+
+  /**
    * Per-Move-phase undo stack: each entry records a unit's position prior to
    * a committed move. Cleared on `endMove`. See feature
    * docs/features/movement-preview-and-undo.md.

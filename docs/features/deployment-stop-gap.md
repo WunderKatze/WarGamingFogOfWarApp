@@ -53,6 +53,13 @@ Restarting the whole game to fix one bad placement is too heavy. This patch adds
 - The pen *keeps* the cloned settings after placement, so the player can keep dropping copies in a rhythm. Changing any pen field, or pressing Escape, breaks out of the cloning rhythm and resumes normal pen use.
 - **Cloned-name pattern**: if the source name ends in a number (e.g. `M4 Tank Platoon 1`, `Alpha 7`, `I-3`), increment that trailing number until it's unique among the active player's deployed units. If the source name has no trailing number (e.g. `Alpha`), append ` 2` (and increment from there for further clones).
 
+### 2.5 First-player selection after deployment
+
+- Real wargaming usually has the players roll off to see who goes first. This deserves its own screen so the order isn't silently fixed by which team deployed first.
+- After both players finish deployment, the Transition screen swaps the **Start Turn** button for a *"Who goes first?"* prompt with one button per team (e.g. **Team A goes first** / **Team B goes first**).
+- Clicking a team's button sets the active player but **stays in Transition** — the chosen team's normal Start-Turn screen renders next. This soft-lands a misclick: the wrong team's Transition is just a Start-Turn prompt with no map shown, so the player can pass the device without revealing the opponent's setup.
+- Only renders once, at game start. Subsequent turn handoffs use the unchanged Transition screen.
+
 ---
 
 ## 3. Edge cases
@@ -69,6 +76,8 @@ Restarting the whole game to fix one bad placement is too heavy. This patch adds
 | Clone is clicked while a different unit is primed for reposition | Reposition aborts; pen takes on the cloned settings; next click drops the clone. |
 | Clone after the source unit was deleted | The Selected panel is empty (no selection), so the Clone button isn't visible. No-op. |
 | Clone increments past a million while finding a unique name | Practically n/a, but the search is bounded — at most `ownUnits.length + 1` iterations are needed since that many distinct names can't coexist. |
+| First-player select: player clicks the wrong team's button | The chosen team's Start-Turn Transition renders (no map). Player passes the device to the right player, who can then either click Start Turn (accept the choice) or — if they want to correct — there's no in-game undo; the misclicked team plays first. Acceptable trade-off for the soft-landing rule. |
+| First-player select: player taps Restart from the game menu before choosing | Restart resets to deployment, so the choice screen will render again after re-deploying. No special handling. |
 
 ---
 
@@ -80,6 +89,7 @@ Restarting the whole game to fix one bad placement is too heavy. This patch adds
 4. **Delete always confirms.** Skipping the confirm for "recently placed" or "no modifiers" would add code and rule complexity for a small UX win.
 5. **Clone copies pen settings, not a one-shot place-and-revert.** The pen retains the cloned configuration after placement so the player can chain multiple drops without re-cloning. Changing the pen breaks the rhythm.
 6. **Cloned name pattern is "increment the trailing number, or append ` 2`."** Keeps the player in a numbered series (`Alpha 1`, `Alpha 2`, `Alpha 3`) and avoids name collisions without prompting.
+7. **First-player selection is two-step (select-then-confirm), not one-click.** Picking a team in §2.5 sets the active player but stays in Transition; the next click is the normal Start Turn. A misclick lands on the wrong team's Start-Turn screen (no map shown) rather than directly revealing their setup. Costs one extra click for the soft-landing rule.
 
 ---
 
@@ -110,6 +120,7 @@ Restarting the whole game to fix one bad placement is too heavy. This patch adds
 - `Game.moveUnit` requires Move; add `repositionDeployedUnit(unitId, position)` that requires Deploy and skips `moveHistory` (Deploy has no undo stack).
 - `Unit.name` is already mutable — add a `Game.renameUnit(unitId, name)` that gates on phase (Deploy only for v1 per §5), trims, and rejects blank.
 - No new Game method is needed for **clone** — the existing `deployUnit` is what the next placement uses. The "copy source to pen" logic lives entirely in the view.
+- `Game.chooseFirstPlayer(teamId)` for §2.5: requires Transition, deployment complete, no prior choice, turn 0. Sets `activePlayerIndex` and `state.firstPlayerChosen = true`. Phase stays Transition.
 
 ### 7.2 UI-layer additions
 

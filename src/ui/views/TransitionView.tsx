@@ -19,6 +19,18 @@ export function TransitionView() {
   const buttonLabel = nextIsDeploy ? "Begin Deployment" : "Start Turn";
   const debugUsed = game.state.debugUsedThisTurn;
   const rulesChanged = game.state.rulesChangedThisTurn;
+  // Render the post-deployment first-player-select variant when both
+  // players have deployed but nobody has been picked to go first yet.
+  // Per docs/features/deployment-stop-gap.md §2.5, this is a separate
+  // screen so a misclick lands on the wrong team's Start-Turn prompt
+  // rather than directly revealing their map.
+  if (
+    game.state.isDeploymentComplete() &&
+    game.state.turnNumber === 0 &&
+    !game.state.firstPlayerChosen
+  ) {
+    return <FirstPlayerSelect />;
+  }
 
   const reveal = (ids: string[]) =>
     ids.map((id) => game.state.getUnitById(id)?.name ?? id).join(", ");
@@ -109,6 +121,59 @@ export function TransitionView() {
       >
         {buttonLabel}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Post-deployment "who goes first?" variant. Shown once, between the last
+ * player's endDeployment and the first Move turn. Clicking a team sets the
+ * active player and surfaces that team's normal Start-Turn Transition on
+ * the next render — a misclick is recoverable because the wrong team's
+ * Start-Turn screen reveals no map.
+ */
+function FirstPlayerSelect() {
+  const { game, dispatch } = useGameContext();
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#222",
+        color: "#eee",
+        gap: 32,
+        padding: 24,
+      }}
+    >
+      <div style={{ fontSize: 14, opacity: 0.7 }}>Deployment complete.</div>
+      <h1 style={{ fontSize: 40, margin: 0 }}>Who goes first?</h1>
+      <p style={{ fontSize: 14, opacity: 0.7, margin: 0, maxWidth: 480, textAlign: "center" }}>
+        Roll off at the table, then tap the winning team.
+      </p>
+      <div style={{ display: "flex", gap: 24 }}>
+        {game.state.players.map((team) => (
+          <button
+            key={team}
+            type="button"
+            onClick={() => dispatch((g) => g.chooseFirstPlayer(team))}
+            style={{
+              padding: "20px 36px",
+              background: "#2b6cb0",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              fontSize: 22,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Team {team} goes first
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

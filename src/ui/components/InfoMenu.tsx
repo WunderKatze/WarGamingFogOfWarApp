@@ -109,6 +109,9 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
     : revealed ? "Revealed" : "Detected";
 
   const stealth = getStealthAtPosition(unit, position, game.state.map);
+  const gtg = game.isGoneToGround(unit);
+  const gtgMultiplier = gtg ? getRules().goneToGroundStealthModifier : 1;
+  const totalStealth = stealth.value * gtgMultiplier;
   const pos = position;
 
   return (
@@ -129,7 +132,13 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
         <span>·</span>
         <span>{visionLabel}</span>
         <span>·</span>
-        <span>Stealth ×{stealth.value} ({stealth.source})</span>
+        {gtg ? (
+          <span>
+            Stealth ×{stealth.value} ({stealth.source}) × ×{gtgMultiplier} (Gone to Ground) = ×{totalStealth}
+          </span>
+        ) : (
+          <span>Stealth ×{stealth.value} ({stealth.source})</span>
+        )}
       </div>
       {unit instanceof Infantry && (
         <div style={detailRowStyle}>

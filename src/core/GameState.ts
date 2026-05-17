@@ -71,6 +71,30 @@ export class GameState {
   /** Units that the active player has marked as firing during the current FireDeclare phase. */
   firedThisTurn = new Set<UnitId>();
 
+  /**
+   * Units owned by the active player that moved (`Game.moveUnit`) or were
+   * added mid-game (`Game.createUnit`) during the current turn. Per
+   * docs/features/vision-rules-tweaks.md §2.3 + mid-game-roster §4 dec. 4,
+   * both events count as "moved" for the next turn's Gone to Ground check.
+   * Snapshotted into `movedLastTurnByTeam` and cleared at endTurn.
+   */
+  movedThisTurn = new Set<UnitId>();
+
+  /**
+   * Per-team snapshot of `movedThisTurn` taken at that team's most recent
+   * endTurn. Read by the next vision phase's Gone to Ground eligibility
+   * check. A team with no prior endTurn (first move turn after deploy)
+   * has no entry — GtG treats absent as "no movements last turn."
+   */
+  movedLastTurnByTeam = new Map<TeamId, ReadonlySet<UnitId>>();
+
+  /**
+   * Per-team snapshot of `firedThisTurn` taken at that team's most recent
+   * endTurn (just before `firedThisTurn` is cleared). Same semantics as
+   * `movedLastTurnByTeam` for the GtG fire check.
+   */
+  firedLastTurnByTeam = new Map<TeamId, ReadonlySet<UnitId>>();
+
   /** Reveal events from the most recent vision phase, for the UI to display notifications. */
   recentReveals: RecentReveals = { added: [], removed: [] };
 

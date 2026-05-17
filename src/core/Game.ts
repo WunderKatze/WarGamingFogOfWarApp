@@ -3,7 +3,7 @@ import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "./type
 import { Infantry } from "./units/Infantry.js";
 import { Tank } from "./units/Tank.js";
 import { Unit } from "./units/Unit.js";
-import { VisionCalculator } from "./VisionCalculator.js";
+import { isGoneToGroundEligible, VisionCalculator } from "./VisionCalculator.js";
 
 export interface CreateUnitParams {
   type: UnitType;
@@ -141,6 +141,10 @@ export class Game {
     }
     const unit = this.buildUnit(params, /* defaultDugIn */ false);
     this.state.units.push(unit);
+    // Per mid-game-roster §4 dec. 4 / vision-rules-tweaks §2.3, units
+    // added mid-game count as "moved last turn" — they're in flux, not
+    // settled. Deployed units (deployUnit) deliberately don't get this.
+    this.state.movedThisTurn.add(unit.id);
     return unit;
   }
 
@@ -158,6 +162,8 @@ export class Game {
     });
     unit.setPosition(newPosition);
     if (unit instanceof Infantry && unit.dugIn) unit.setDugIn(false);
+    // Track for next turn's Gone to Ground check (vision-rules-tweaks §2.3).
+    this.state.movedThisTurn.add(unitId);
   }
 
   /**
@@ -297,9 +303,32 @@ export class Game {
   endTurn(): void {
     this.requirePhase("FireDeclare");
     this.runVisionPhase(this.state.firedThisTurn);
+    // Snapshot this turn's moves and fires into the active team's slot so
+    // next turn's vision phase can run Gone to Ground checks against them
+    // (vision-rules-tweaks §2.3). Snapshots are per-team because each
+    // team's "last turn" is THEIR last turn, not the global most-recent
+    // turn — needed for correct GtG when checking the opponent's units.
+    const activeTeam = this.state.getActivePlayer();
+    this.state.movedLastTurnByTeam.set(activeTeam, new Set(this.state.movedThisTurn));
+    this.state.firedLastTurnByTeam.set(activeTeam, new Set(this.state.firedThisTurn));
     this.state.firedThisTurn = new Set();
+    this.state.movedThisTurn = new Set();
     this.state.activePlayerIndex = this.state.getNextPlayerIndex();
     this.state.phase = "Transition";
+  }
+
+  /**
+   * Public Gone to Ground eligibility check — same predicate used inside
+   * the vision pipeline. UI uses this to show the GtG line in the info
+   * menu and to render the token badge (vision-rules-tweaks §2.4).
+   */
+  isGoneToGround(unit: Unit): boolean {
+    return isGoneToGroundEligible(
+      unit,
+      this.state.map,
+      this.state.movedLastTurnByTeam,
+      this.state.firedLastTurnByTeam,
+    );
   }
 
   /**
@@ -379,7 +408,13 @@ export class Game {
 
   private runVisionPhase(firedIds: ReadonlySet<UnitId>): void {
     const before = new Set(this.state.visionState.revealed);
-    this.visionCalculator.runVisionPhase(this.state.visionState, this.state.units, firedIds);
+    this.visionCalculator.runVisionPhase(
+      this.state.visionState,
+      this.state.units,
+      firedIds,
+      this.state.movedLastTurnByTeam,
+      this.state.firedLastTurnByTeam,
+    );
     const after = this.state.visionState.revealed;
     this.state.recentReveals = {
       added: [...after].filter((id) => !before.has(id)),

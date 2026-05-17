@@ -355,3 +355,76 @@ describe("VisionCalculator.runVisionPhase — carry-over", () => {
     expect(state.revealed).toEqual(firstRevealed);
   });
 });
+
+describe("VisionCalculator — Gone to Ground", () => {
+  // A 30"-wide Short Terrain strip from x=10 to x=40. Short Terrain never
+  // blocks sight (so we can rely on discover, not see) and its stealth
+  // multiplier is 2. Tank intrinsic stealth = 1, vision = 48.
+  // Observer at (0, 50), target at (18, 50): ray crosses 8" of short
+  // terrain (well past the 2" grace), target is inside the polygon (so
+  // GtG-eligible when the snapshots clear it).
+  //   Without GtG: range = 48 / 2     = 24" → 18" detected.
+  //   With    GtG: range = 48 / (2*2) = 12" → 18" NOT detected.
+  const coverMap = () => {
+    const strip = square("st", 10, 0, 30, 100, "ShortTerrain");
+    return new GameMap({ width: 1000, height: 100, polygons: [strip] });
+  };
+
+  it("stacks GtG on top of the single-highest terrain mod, blocking discovery that would otherwise succeed", () => {
+    const vc = new VisionCalculator(coverMap());
+    const observer = tankAt("A1", p(0, 50), "A");
+    const target = tankAt("B1", p(18, 50), "B");
+
+    // Baseline with B explicitly disqualified (moved last turn) → no GtG
+    // → A discovers B at 18".
+    const baseState = createEmptyVisionState();
+    const movedB = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set(["B1"])]]);
+    const noFired = new Map<TeamId, ReadonlySet<UnitId>>();
+    vc.runVisionPhase(baseState, [observer, target], new Set(), movedB, noFired);
+    expectIndividual(baseState, "A1", ["B1"]);
+
+    // With B clean (no move, no fire last turn) → GtG kicks in → stealth
+    // doubles to ×4 → A does NOT discover B at 18".
+    const gtgState = createEmptyVisionState();
+    const cleanMoved = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set()]]);
+    const cleanFired = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set()]]);
+    vc.runVisionPhase(gtgState, [observer, target], new Set(), cleanMoved, cleanFired);
+    expectIndividual(gtgState, "A1", []);
+  });
+
+  it("does not apply GtG when the target moved last turn", () => {
+    const vc = new VisionCalculator(coverMap());
+    const observer = tankAt("A1", p(0, 50), "A");
+    const target = tankAt("B1", p(18, 50), "B");
+    const state = createEmptyVisionState();
+    const moved = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set(["B1"])]]);
+    const fired = new Map<TeamId, ReadonlySet<UnitId>>();
+    vc.runVisionPhase(state, [observer, target], new Set(), moved, fired);
+    expectIndividual(state, "A1", ["B1"]);
+  });
+
+  it("does not apply GtG when the target fired last turn", () => {
+    const vc = new VisionCalculator(coverMap());
+    const observer = tankAt("A1", p(0, 50), "A");
+    const target = tankAt("B1", p(18, 50), "B");
+    const state = createEmptyVisionState();
+    const moved = new Map<TeamId, ReadonlySet<UnitId>>();
+    const fired = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set(["B1"])]]);
+    vc.runVisionPhase(state, [observer, target], new Set(), moved, fired);
+    expectIndividual(state, "A1", ["B1"]);
+  });
+
+  it("does not apply GtG when the target is not in a cover-providing polygon", () => {
+    // Same observer / target positions as the snapshots-clear case above,
+    // but the cover-polygon map has been replaced with an empty map, so
+    // GtG can't trigger even though the snapshots would allow it.
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
+    const observer = tankAt("A1", p(0, 50), "A");
+    const target = tankAt("B1", p(40, 50), "B"); // open ground
+    const state = createEmptyVisionState();
+    const moved = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set()]]);
+    const fired = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set()]]);
+    vc.runVisionPhase(state, [observer, target], new Set(), moved, fired);
+    expectIndividual(state, "A1", ["B1"]);
+  });
+});

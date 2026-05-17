@@ -1,6 +1,6 @@
 # Feature: Deployment lifecycle (stop-gap)
 
-**Status:** Approved
+**Status:** Complete
 **Target Version:** v1
 **Owner:** Ryan
 **Last Updated:** 2026-05-16
@@ -66,8 +66,8 @@ Restarting the whole game to fix one bad placement is too heavy. This patch adds
 
 | Scenario | Behavior |
 |---|---|
-| Reposition primed, then unit selection cleared (e.g. click empty map) | Reposition aborts; next map click is a normal placement. |
-| Reposition primed, then a different unit is selected | Reposition aborts and re-primes for the newly-selected unit (intuitive: you intend to move *that* one now). |
+| Reposition primed, then the player clicks empty map | That click *is* the reposition — the selected unit moves to the clicked point, priming clears, selection stays on the unit. |
+| Reposition primed, then a different unit is clicked (selection changes) | Priming clears silently. The player must click **Move…** again on the new selection if they want to reposition it. Avoids the surprise of priming "following" a selection change. |
 | Delete the unit currently primed for reposition | Reposition state clears with the unit. |
 | Custom name collides with an existing deployed unit's name | Allowed silently. Names aren't unique keys; the unit id is. The player owns name uniqueness if they care. |
 | Custom name field non-blank when player switches phase | Discarded — pen state is per-Deploy-phase. |

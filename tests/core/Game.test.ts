@@ -287,6 +287,73 @@ describe("Game — Move phase", () => {
     expect(() => g.toggleDugIn("u1")).toThrow(/not Infantry/);
   });
 
+  it("moveUnit clears dug-in on Infantry", () => {
+    const g = makeGame();
+    const inf = g.deployUnit({ type: "Infantry", name: "A1", position: p(0, 0) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Tank", name: "B1", position: p(200, 200) });
+    g.endDeployment();
+    g.chooseFirstPlayer("A");
+    g.startTurn();
+    g.endAddRemoveUnits();
+    expect((inf as Infantry).dugIn).toBe(true); // Deploy default
+    g.moveUnit(inf.id, p(5, 5));
+    expect((inf as Infantry).dugIn).toBe(false);
+  });
+
+  it("undoLastMove restores Infantry dug-in alongside position", () => {
+    const g = makeGame();
+    const inf = g.deployUnit({ type: "Infantry", name: "A1", position: p(0, 0) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Tank", name: "B1", position: p(200, 200) });
+    g.endDeployment();
+    g.chooseFirstPlayer("A");
+    g.startTurn();
+    g.endAddRemoveUnits();
+    g.moveUnit(inf.id, p(5, 5));
+    expect((inf as Infantry).dugIn).toBe(false);
+    g.undoLastMove();
+    expect((inf as Infantry).getPosition()).toEqual({ x: 0, y: 0 });
+    expect((inf as Infantry).dugIn).toBe(true);
+  });
+
+  it("revertUnitMoves restores dug-in from the earliest move history entry", () => {
+    const g = makeGame();
+    const inf = g.deployUnit({ type: "Infantry", name: "A1", position: p(0, 0) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Tank", name: "B1", position: p(200, 200) });
+    g.endDeployment();
+    g.chooseFirstPlayer("A");
+    g.startTurn();
+    g.endAddRemoveUnits();
+    g.moveUnit(inf.id, p(5, 5));
+    g.moveUnit(inf.id, p(10, 10));
+    g.moveUnit(inf.id, p(15, 15));
+    g.revertUnitMoves(inf.id);
+    expect((inf as Infantry).getPosition()).toEqual({ x: 0, y: 0 });
+    expect((inf as Infantry).dugIn).toBe(true);
+  });
+
+  it("Tank moveUnit does not crash or record priorDugIn", () => {
+    const g = setupAtMove();
+    g.moveUnit("u1", p(5, 5));  // u1 is a Tank
+    expect(g.state.moveHistory).toEqual([
+      { unitId: "u1", priorPosition: { x: 0, y: 0 } },
+    ]);
+  });
+
+  it("repositionDeployedUnit preserves Infantry dug-in (Deploy = re-deployment, not movement)", () => {
+    const g = makeGame();
+    const inf = g.deployUnit({ type: "Infantry", name: "A1", position: p(0, 0) });
+    expect((inf as Infantry).dugIn).toBe(true);
+    g.repositionDeployedUnit(inf.id, p(50, 60));
+    expect((inf as Infantry).getPosition()).toEqual({ x: 50, y: 60 });
+    expect((inf as Infantry).dugIn).toBe(true);
+  });
+
   it("endMove transitions to FireDeclare and runs the pre-fire vision phase", () => {
     const g = setupAtMove();
     g.endMove();
@@ -389,8 +456,10 @@ describe("Game — move history and undo", () => {
     expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 0, y: 0 });
     // Infantry untouched at its post-move position; its entry still on the stack.
     expect(g.state.getUnitById(inf.id)?.getPosition()).toEqual({ x: 2, y: 2 });
+    // Infantry has dugIn recorded too (priorDugIn=false because mid-game
+    // createUnit defaults to not-dug-in).
     expect(g.state.moveHistory).toEqual([
-      { unitId: inf.id, priorPosition: { x: 1, y: 1 } },
+      { unitId: inf.id, priorPosition: { x: 1, y: 1 }, priorDugIn: false },
     ]);
   });
 

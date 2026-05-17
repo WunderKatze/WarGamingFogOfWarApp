@@ -12,6 +12,15 @@ import { createEmptyVisionState, type VisionState } from "./VisionState.js";
 export interface MoveHistoryEntry {
   unitId: UnitId;
   priorPosition: Point;
+  /**
+   * Pre-move dug-in flag for Infantry. Recorded alongside the position
+   * so `undoLastMove` / `revertUnitMoves` can restore both — per
+   * docs/features/vision-rules-tweaks.md §2.1, moveUnit clears dug-in
+   * on Infantry, and undoing a move must restore it. Absent for Tanks
+   * (no dug-in concept) and for any future unit type that doesn't
+   * support the flag.
+   */
+  priorDugIn?: boolean;
 }
 
 export type GamePhase =

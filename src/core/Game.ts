@@ -147,8 +147,17 @@ export class Game {
   moveUnit(unitId: UnitId, newPosition: Point): void {
     this.requirePhase("Move");
     const unit = this.requireOwnUnit(unitId);
-    this.state.moveHistory.push({ unitId, priorPosition: unit.getPosition() });
+    // Snapshot dug-in alongside position so undoLastMove / revertUnitMoves
+    // can restore both — per docs/features/vision-rules-tweaks.md §2.1,
+    // moving an Infantry resets its dug-in state.
+    const priorDugIn = unit instanceof Infantry ? unit.dugIn : undefined;
+    this.state.moveHistory.push({
+      unitId,
+      priorPosition: unit.getPosition(),
+      ...(priorDugIn !== undefined && { priorDugIn }),
+    });
     unit.setPosition(newPosition);
+    if (unit instanceof Infantry && unit.dugIn) unit.setDugIn(false);
   }
 
   /**
@@ -167,6 +176,11 @@ export class Game {
       const unit = this.state.getUnitById(entry.unitId);
       if (unit) {
         unit.setPosition(entry.priorPosition);
+        // Restore dug-in if it was snapshotted (Infantry only). Tank moves
+        // recorded undefined for priorDugIn, so the check is a no-op.
+        if (entry.priorDugIn !== undefined && unit instanceof Infantry) {
+          unit.setDugIn(entry.priorDugIn);
+        }
         return;
       }
     }
@@ -187,6 +201,9 @@ export class Game {
     const earliest = this.state.moveHistory.find((e) => e.unitId === unitId);
     if (!earliest) return;
     unit.setPosition(earliest.priorPosition);
+    if (earliest.priorDugIn !== undefined && unit instanceof Infantry) {
+      unit.setDugIn(earliest.priorDugIn);
+    }
     this.state.moveHistory = this.state.moveHistory.filter((e) => e.unitId !== unitId);
   }
 

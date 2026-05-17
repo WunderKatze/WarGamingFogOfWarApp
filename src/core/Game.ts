@@ -91,9 +91,12 @@ export class Game {
   }
 
   /**
-   * Active player taps "Start Turn" from the Transition screen. Begins either
-   * their initial deployment or their movement turn (running the pre-move
-   * vision phase) depending on game state.
+   * Active player taps "Start Turn" from the Transition screen. Begins
+   * either their initial deployment or the pre-Move "Add/Remove Units"
+   * phase depending on game state. The pre-Move vision phase does *not*
+   * run here — it runs at `endAddRemoveUnits` so any roster cleanup the
+   * player does first participates in the same vision recompute. See
+   * docs/features/mid-game-roster.md §2.3.
    */
   startTurn(): void {
     this.requirePhase("Transition");
@@ -106,6 +109,18 @@ export class Game {
       return;
     }
     this.state.turnNumber += 1;
+    this.state.phase = "AddRemoveUnits";
+  }
+
+  // --- Add/Remove Units phase ---
+
+  /**
+   * Active player advances from the Add/Remove Units phase to Move,
+   * triggering the pre-Move vision phase. Any units added or removed
+   * during Add/Remove are included in this vision recompute.
+   */
+  endAddRemoveUnits(): void {
+    this.requirePhase("AddRemoveUnits");
     this.state.phase = "Move";
     this.runVisionPhase(new Set());
   }
@@ -113,11 +128,17 @@ export class Game {
   // --- Move phase ---
 
   /**
-   * Mid-game unit creation (reserves entering the board, infantry disembarking).
-   * Infantry defaults to `dugIn: false` per §3.2 unless overridden.
+   * Mid-game unit creation (reserves entering the board, infantry
+   * disembarking). Infantry defaults to `dugIn: false` per §3.2 unless
+   * overridden. Allowed during Move (mid-turn arrivals) or AddRemoveUnits
+   * (pre-Move casualty cleanup), per docs/features/mid-game-roster.md.
    */
   createUnit(params: CreateUnitParams): Unit {
-    this.requirePhase("Move");
+    if (this.state.phase !== "Move" && this.state.phase !== "AddRemoveUnits") {
+      throw new Error(
+        `createUnit requires Move or AddRemoveUnits, got ${this.state.phase}`,
+      );
+    }
     const unit = this.buildUnit(params, /* defaultDugIn */ false);
     this.state.units.push(unit);
     return unit;
@@ -170,11 +191,17 @@ export class Game {
   }
 
   deleteUnit(unitId: UnitId): void {
-    // Allowed in Move (mid-game losses) and Deploy (player wants to fix a
-    // misclick during setup, per docs/features/deployment-stop-gap.md §2.2).
-    if (this.state.phase !== "Move" && this.state.phase !== "Deploy") {
+    // Allowed in Move (mid-game losses), Deploy (fix a misclick during
+    // setup, per docs/features/deployment-stop-gap.md §2.2), and
+    // AddRemoveUnits (between-turn casualty cleanup, per
+    // docs/features/mid-game-roster.md §2.3).
+    if (
+      this.state.phase !== "Move" &&
+      this.state.phase !== "Deploy" &&
+      this.state.phase !== "AddRemoveUnits"
+    ) {
       throw new Error(
-        `deleteUnit requires Move or Deploy, got ${this.state.phase}`,
+        `deleteUnit requires Move, Deploy, or AddRemoveUnits, got ${this.state.phase}`,
       );
     }
     this.requireOwnUnit(unitId);

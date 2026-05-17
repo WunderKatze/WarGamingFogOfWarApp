@@ -91,7 +91,7 @@ describe("Game — deployment flow", () => {
     const g = makeGame();
     g.deployUnit({ type: "Tank", name: "A1", position: p(0, 0) });
     g.endDeployment(); // → Transition
-    expect(() => g.deleteUnit("u1")).toThrow(/Move or Deploy/);
+    expect(() => g.deleteUnit("u1")).toThrow(/Move, Deploy, or AddRemoveUnits/);
   });
 
   it("repositionDeployedUnit moves an own unit during Deploy without writing to moveHistory", () => {
@@ -132,11 +132,14 @@ describe("Game — deployment flow", () => {
     g.chooseFirstPlayer("B");
     expect(g.state.getActivePlayer()).toBe("B");
     expect(g.state.firstPlayerChosen).toBe(true);
-    // Subsequent startTurn enters Move for B as turn 1.
+    // Subsequent startTurn enters the AddRemoveUnits phase for B as turn 1.
     g.startTurn();
-    expect(g.state.phase).toBe("Move");
+    expect(g.state.phase).toBe("AddRemoveUnits");
     expect(g.state.turnNumber).toBe(1);
     expect(g.state.getActivePlayer()).toBe("B");
+    // endAddRemoveUnits advances to Move.
+    g.endAddRemoveUnits();
+    expect(g.state.phase).toBe("Move");
   });
 
   it("chooseFirstPlayer rejects a second call", () => {
@@ -169,20 +172,57 @@ describe("Game — startTurn from Transition", () => {
     expect(g.state.getActivePlayer()).toBe("B");
   });
 
-  it("after deployment, startTurn enters Move, increments turn number, and runs the pre-move vision phase", () => {
+  it("after deployment, startTurn enters AddRemoveUnits (not Move) and defers the pre-move vision phase", () => {
     const g = makeGame();
     g.deployUnit({ type: "Tank", name: "A1", position: p(0, 0) });
     g.endDeployment();
     g.startTurn(); // → B's Deploy
     g.deployUnit({ type: "Tank", name: "B1", position: p(20, 0) });
     g.endDeployment();
-    // Now A's first movement turn
+    g.chooseFirstPlayer("A");
     g.startTurn();
-    expect(g.state.phase).toBe("Move");
+    expect(g.state.phase).toBe("AddRemoveUnits");
     expect(g.state.turnNumber).toBe(1);
-    // Pre-move vision phase ran: A1 and B1 are close enough to mutually discover
+    // Vision phase has NOT run yet — list for u1 should be empty / undefined.
+    const aListBefore = g.state.visionState.individualLists.get("u1");
+    expect(aListBefore?.has("u2") ?? false).toBe(false);
+  });
+
+  it("endAddRemoveUnits transitions to Move and runs the pre-move vision phase", () => {
+    const g = makeGame();
+    g.deployUnit({ type: "Tank", name: "A1", position: p(0, 0) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Tank", name: "B1", position: p(20, 0) });
+    g.endDeployment();
+    g.chooseFirstPlayer("A");
+    g.startTurn(); // → AddRemoveUnits
+    g.endAddRemoveUnits();
+    expect(g.state.phase).toBe("Move");
+    // Vision phase ran: A1 and B1 are close enough to mutually discover.
     const aList = g.state.visionState.individualLists.get("u1");
     expect(aList?.has("u2")).toBe(true);
+  });
+
+  it("createUnit and deleteUnit are accepted during AddRemoveUnits", () => {
+    const g = makeGame();
+    g.deployUnit({ type: "Tank", name: "A1", position: p(0, 0) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Tank", name: "B1", position: p(20, 0) });
+    g.endDeployment();
+    g.chooseFirstPlayer("A");
+    g.startTurn(); // A → AddRemoveUnits
+    const added = g.createUnit({ type: "Infantry", name: "Bailout", position: p(5, 5) });
+    expect(g.state.units).toContain(added);
+    g.deleteUnit(added.id);
+    expect(g.state.units.find((u) => u.id === added.id)).toBeUndefined();
+  });
+
+  it("endAddRemoveUnits throws when called outside AddRemoveUnits", () => {
+    const g = makeGame();
+    g.endDeployment(); // mid-deploy Transition
+    expect(() => g.endAddRemoveUnits()).toThrow(/Invalid phase/);
   });
 });
 
@@ -194,7 +234,9 @@ describe("Game — Move phase", () => {
     g.startTurn();
     g.deployUnit({ type: "Tank", name: "B1", position: p(200, 200) });
     g.endDeployment();
-    g.startTurn(); // A's movement turn
+    g.chooseFirstPlayer("A");
+    g.startTurn();           // A's first turn → AddRemoveUnits
+    g.endAddRemoveUnits();   // → Move (runs pre-move vision phase)
     return g;
   }
 
@@ -232,7 +274,9 @@ describe("Game — Move phase", () => {
     g.startTurn();
     g.deployUnit({ type: "Tank", name: "B1", position: p(200, 200) });
     g.endDeployment();
+    g.chooseFirstPlayer("A");
     g.startTurn();
+    g.endAddRemoveUnits();
     expect((inf as Infantry).dugIn).toBe(true);
     g.toggleDugIn(inf.id);
     expect((inf as Infantry).dugIn).toBe(false);
@@ -258,7 +302,9 @@ describe("Game — move history and undo", () => {
     g.startTurn();
     g.deployUnit({ type: "Tank", name: "B1", position: p(200, 200) });
     g.endDeployment();
+    g.chooseFirstPlayer("A");
     g.startTurn();
+    g.endAddRemoveUnits();
     return g;
   }
 
@@ -378,7 +424,9 @@ describe("Game — FireDeclare phase and end of turn", () => {
     g.startTurn();
     g.deployUnit({ type: "Tank", name: "B1", position: p(1500, 0) });
     g.endDeployment();
-    g.startTurn(); // A's move
+    g.chooseFirstPlayer("A");
+    g.startTurn();           // A → AddRemoveUnits
+    g.endAddRemoveUnits();   // → Move (runs vision)
     g.endMove();
     // Sanity: nobody discovered anybody, nobody is revealed yet.
     expect(g.state.visionState.revealed.size).toBe(0);
@@ -425,10 +473,13 @@ describe("Game — end-to-end happy path", () => {
     g.startTurn();
     g.deployUnit({ type: "Tank", name: "B1", position: p(20, 0) });
     g.endDeployment();
+    // First-player select
+    g.chooseFirstPlayer("A");
     // A's turn
     g.startTurn();
     expect(g.state.turnNumber).toBe(1);
     expect(g.state.getActivePlayer()).toBe("A");
+    g.endAddRemoveUnits();   // skip through; nothing to adjust on turn 1
     g.moveUnit("u1", p(5, 0));
     g.endMove();
     g.endTurn();
@@ -436,6 +487,7 @@ describe("Game — end-to-end happy path", () => {
     g.startTurn();
     expect(g.state.turnNumber).toBe(2);
     expect(g.state.getActivePlayer()).toBe("B");
+    g.endAddRemoveUnits();
     g.moveUnit("u2", p(15, 0));
     g.endMove();
     g.endTurn();
@@ -488,7 +540,9 @@ describe("Game — rules-changed flag", () => {
     g.startTurn();
     g.deployUnit({ type: "Infantry", name: "B1", position: p(20, 20) });
     g.endDeployment();
+    g.chooseFirstPlayer("A");
     g.startTurn();
+    g.endAddRemoveUnits();
     expect(g.state.phase).toBe("Move");
     g.markRulesChanged();
     expect(g.state.rulesChangedThisTurn).toBe(true);

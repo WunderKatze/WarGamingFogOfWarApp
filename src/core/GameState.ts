@@ -14,7 +14,19 @@ export interface MoveHistoryEntry {
   priorPosition: Point;
 }
 
-export type GamePhase = "Deploy" | "Transition" | "Move" | "FireDeclare";
+export type GamePhase =
+  | "Deploy"
+  | "Transition"
+  /**
+   * Pre-Move roster cleanup phase (add bailouts / reinforcements, remove
+   * casualties) that runs once between each Transition and Move. The
+   * pre-Move vision phase fires at the end of this phase, NOT at startTurn,
+   * so adds/removes here participate in the same vision recompute.
+   * See docs/features/mid-game-roster.md §2.3.
+   */
+  | "AddRemoveUnits"
+  | "Move"
+  | "FireDeclare";
 
 export interface RecentReveals {
   added: UnitId[];

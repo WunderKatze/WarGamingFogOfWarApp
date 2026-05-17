@@ -21,6 +21,12 @@ export interface MoveHistoryEntry {
    * support the flag.
    */
   priorDugIn?: boolean;
+  /**
+   * Pre-move Gone to Ground flag. Always recorded (every unit type has
+   * one) so undoing a move restores GtG to whatever it was before the
+   * move broke it. See vision-rules-tweaks §2.3.
+   */
+  priorGoneToGround: boolean;
 }
 
 export type GamePhase =
@@ -73,27 +79,11 @@ export class GameState {
 
   /**
    * Units owned by the active player that moved (`Game.moveUnit`) or were
-   * added mid-game (`Game.createUnit`) during the current turn. Per
-   * docs/features/vision-rules-tweaks.md §2.3 + mid-game-roster §4 dec. 4,
-   * both events count as "moved" for the next turn's Gone to Ground check.
-   * Snapshotted into `movedLastTurnByTeam` and cleared at endTurn.
+   * added mid-game (`Game.createUnit`) during the current turn. Read by
+   * `toggleFire` to decide whether to restore Gone to Ground when fire is
+   * un-declared. Cleared at endTurn.
    */
   movedThisTurn = new Set<UnitId>();
-
-  /**
-   * Per-team snapshot of `movedThisTurn` taken at that team's most recent
-   * endTurn. Read by the next vision phase's Gone to Ground eligibility
-   * check. A team with no prior endTurn (first move turn after deploy)
-   * has no entry — GtG treats absent as "no movements last turn."
-   */
-  movedLastTurnByTeam = new Map<TeamId, ReadonlySet<UnitId>>();
-
-  /**
-   * Per-team snapshot of `firedThisTurn` taken at that team's most recent
-   * endTurn (just before `firedThisTurn` is cleared). Same semantics as
-   * `movedLastTurnByTeam` for the GtG fire check.
-   */
-  firedLastTurnByTeam = new Map<TeamId, ReadonlySet<UnitId>>();
 
   /** Reveal events from the most recent vision phase, for the UI to display notifications. */
   recentReveals: RecentReveals = { added: [], removed: [] };

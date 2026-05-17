@@ -1,33 +1,9 @@
 import { GameMap } from "./map/GameMap.js";
 import { distance } from "./map/geometry.js";
-import { polygonTerrainCatalog } from "./map/terrainCatalog.js";
 import { getRules } from "./rules.js";
 import { Unit } from "./units/Unit.js";
 import type { TeamId, UnitId } from "./types.js";
 import type { VisionState } from "./VisionState.js";
-
-/**
- * Standalone Gone to Ground eligibility check (vision-rules-tweaks §2.3).
- * Pure function over a single unit + the team-keyed history snapshots
- * the Game owns. Shared between the vision pipeline (via `makeGtGEligible`)
- * and the InfoMenu display, so the two surfaces agree on who qualifies.
- */
-export function isGoneToGroundEligible(
-  unit: Unit,
-  gameMap: GameMap,
-  movedLastTurnByTeam: ReadonlyMap<TeamId, ReadonlySet<UnitId>>,
-  firedLastTurnByTeam: ReadonlyMap<TeamId, ReadonlySet<UnitId>>,
-): boolean {
-  if (movedLastTurnByTeam.get(unit.teamId)?.has(unit.id)) return false;
-  if (firedLastTurnByTeam.get(unit.teamId)?.has(unit.id)) return false;
-  const pos = unit.getPosition();
-  for (const poly of gameMap.polygons) {
-    if (!poly.containsPoint(pos)) continue;
-    const entry = polygonTerrainCatalog[poly.terrainType];
-    if (entry.stealthMultiplier > 1) return true;
-  }
-  return false;
-}
 
 export class VisionCalculator {
   constructor(public readonly gameMap: GameMap) {}
@@ -48,17 +24,19 @@ export class VisionCalculator {
    *   - see(observer, target) is true, AND
    *   - distance(observer, target) <= observer.vision / target.effective_stealth
    *
-   * effective_stealth = target.intrinsicStealth × max(applicable concealment modifiers) × gtg?
-   * The pool of modifiers comprises every terrain modifier along the ray and the
-   * target's own inherent concealment (e.g. dug-in); only the single highest of
-   * these applies. **Gone to Ground** then stacks multiplicatively on top of the
-   * single-highest when `gtgEligible(target)` returns true — see
-   * docs/features/vision-rules-tweaks.md §2.3.
+   * effective_stealth = target.intrinsicStealth × highestMod × gtg?
+   * `highestMod` is the maximum of all per-ray terrain modifiers plus the
+   * target's own inherent concealment (dug-in); only the single highest
+   * applies. The target is **concealed** for this ray when `highestMod > 1`.
    *
-   * `gtgEligible` is optional so external callers (and tests) don't need to
-   * build the predicate; omitting it means no GtG bonus.
+   * **Gone to Ground** stacks multiplicatively on top when both:
+   *   - the target's `goneToGround` flag is true, AND
+   *   - the target is concealed for this ray (per the rule above).
+   * A GtG unit in the open with no inherent concealment gets no GtG stack;
+   * the same unit viewed across a short wall or through short terrain does.
+   * See docs/features/vision-rules-tweaks.md §2.3.
    */
-  discover(observer: Unit, target: Unit, gtgEligible?: (u: Unit) => boolean): boolean {
+  discover(observer: Unit, target: Unit): boolean {
     if (!this.see(observer, target)) return false;
 
     const observerPos = observer.getPosition();
@@ -68,7 +46,7 @@ export class VisionCalculator {
     const inherentMod = target.getInherentConcealmentModifier();
     let highestMod = Math.max(1, inherentMod, ...terrainMods);
 
-    if (gtgEligible?.(target)) {
+    if (target.goneToGround && highestMod > 1) {
       highestMod *= getRules().goneToGroundStealthModifier;
     }
 
@@ -76,15 +54,6 @@ export class VisionCalculator {
     const visionRange = observer.getVision() / effectiveStealth;
 
     return distance(observerPos, targetPos) <= visionRange;
-  }
-
-  /** Build the GtG predicate by closing over the helper + the gameMap. */
-  private makeGtGEligible(
-    movedLastTurnByTeam: ReadonlyMap<TeamId, ReadonlySet<UnitId>>,
-    firedLastTurnByTeam: ReadonlyMap<TeamId, ReadonlySet<UnitId>>,
-  ): (unit: Unit) => boolean {
-    return (unit) =>
-      isGoneToGroundEligible(unit, this.gameMap, movedLastTurnByTeam, firedLastTurnByTeam);
   }
 
   /**
@@ -105,10 +74,7 @@ export class VisionCalculator {
     state: VisionState,
     units: readonly Unit[],
     firedIds: ReadonlySet<UnitId>,
-    movedLastTurnByTeam: ReadonlyMap<TeamId, ReadonlySet<UnitId>> = new Map(),
-    firedLastTurnByTeam: ReadonlyMap<TeamId, ReadonlySet<UnitId>> = new Map(),
   ): void {
-    const gtgEligible = this.makeGtGEligible(movedLastTurnByTeam, firedLastTurnByTeam);
     const unitsById = new Map<UnitId, Unit>();
     const unitsByTeam = new Map<TeamId, Unit[]>();
     for (const u of units) {
@@ -136,7 +102,7 @@ export class VisionCalculator {
     // Phase 3: cascade — additions + mutual detection until Revealed stabilizes
     while (true) {
       const revealedBefore = state.revealed.size;
-      this.addNewEntriesToFixedPoint(state, units, unitsByTeam, gtgEligible);
+      this.addNewEntriesToFixedPoint(state, units, unitsByTeam);
       this.applyMutualDetection(state, units);
       if (state.revealed.size === revealedBefore) break;
       this.recomputeTeamLists(state, unitsById, unitsByTeam);
@@ -218,7 +184,6 @@ export class VisionCalculator {
     state: VisionState,
     units: readonly Unit[],
     unitsByTeam: ReadonlyMap<TeamId, readonly Unit[]>,
-    gtgEligible: (u: Unit) => boolean,
   ): void {
     let changed = true;
     while (changed) {
@@ -231,7 +196,7 @@ export class VisionCalculator {
           for (const enemy of enemies) {
             if (fIndList?.has(enemy.id)) continue;
             const onTeamList = fTeamList?.has(enemy.id) ?? false;
-            const detected = onTeamList ? this.see(friendly, enemy) : this.discover(friendly, enemy, gtgEligible);
+            const detected = onTeamList ? this.see(friendly, enemy) : this.discover(friendly, enemy);
             if (!detected) continue;
 
             if (!fIndList) {

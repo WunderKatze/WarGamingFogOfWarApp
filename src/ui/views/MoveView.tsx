@@ -4,6 +4,7 @@ import type { Point, UnitId, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
+import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
 import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
@@ -72,6 +73,7 @@ export function MoveView() {
   const selectedOwn = selected && selected.teamId === active ? selected : undefined;
   const canUndo = game.state.moveHistory.length > 0;
   const waypointModeActive = shiftHeld || waypointToggle;
+  const { dugInUnitIds, goneToGroundUnitIds } = computeUnitStatusBadges(game);
 
   const autoName = (): string => `${penType[0]}-${ownUnits.length + 1}`;
 
@@ -375,6 +377,8 @@ export function MoveView() {
           perspectiveTeamId={active}
           selectedUnitId={effectiveSelectedId}
           revealedUnitIds={game.state.visionState.revealed}
+          dugInUnitIds={dugInUnitIds}
+          goneToGroundUnitIds={goneToGroundUnitIds}
           ghostUnitId={activeMove?.unitId}
           strictUnitSelect={!!activeMove}
           onUnitClick={handleUnitClick}

@@ -3,7 +3,7 @@ import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "./type
 import { Infantry } from "./units/Infantry.js";
 import { Tank } from "./units/Tank.js";
 import { Unit } from "./units/Unit.js";
-import { isGoneToGroundEligible, VisionCalculator } from "./VisionCalculator.js";
+import { VisionCalculator } from "./VisionCalculator.js";
 
 export interface CreateUnitParams {
   type: UnitType;
@@ -41,7 +41,9 @@ export class Game {
    */
   deployUnit(params: CreateUnitParams): Unit {
     this.requirePhase("Deploy");
-    const unit = this.buildUnit(params, /* defaultDugIn */ true);
+    // Deployed units start "settled" — gone to ground by default. See
+    // vision-rules-tweaks §2.3.
+    const unit = this.buildUnit(params, /* defaultDugIn */ true, /* defaultGoneToGround */ true);
     this.state.units.push(unit);
     return unit;
   }
@@ -109,6 +111,14 @@ export class Game {
       return;
     }
     this.state.turnNumber += 1;
+    // Reset Gone to Ground for all of the active player's units — each
+    // own-turn starts with the assumption units will be static; moves and
+    // fires during the turn flip the flag back to false. See
+    // docs/features/vision-rules-tweaks.md §2.3.
+    const active = this.state.getActivePlayer();
+    for (const unit of this.state.units) {
+      if (unit.teamId === active) unit.goneToGround = true;
+    }
     this.state.phase = "AddRemoveUnits";
   }
 
@@ -139,11 +149,11 @@ export class Game {
         `createUnit requires Move or AddRemoveUnits, got ${this.state.phase}`,
       );
     }
-    const unit = this.buildUnit(params, /* defaultDugIn */ false);
+    // Mid-game additions start "in flux" — not gone to ground until the
+    // owner's next own turn (where startTurn resets the flag and a static
+    // remainder of that turn leaves it true). See vision-rules-tweaks §2.3.
+    const unit = this.buildUnit(params, /* defaultDugIn */ false, /* defaultGoneToGround */ false);
     this.state.units.push(unit);
-    // Per mid-game-roster §4 dec. 4 / vision-rules-tweaks §2.3, units
-    // added mid-game count as "moved last turn" — they're in flux, not
-    // settled. Deployed units (deployUnit) deliberately don't get this.
     this.state.movedThisTurn.add(unit.id);
     return unit;
   }
@@ -151,18 +161,20 @@ export class Game {
   moveUnit(unitId: UnitId, newPosition: Point): void {
     this.requirePhase("Move");
     const unit = this.requireOwnUnit(unitId);
-    // Snapshot dug-in alongside position so undoLastMove / revertUnitMoves
-    // can restore both — per docs/features/vision-rules-tweaks.md §2.1,
-    // moving an Infantry resets its dug-in state.
+    // Snapshot dug-in and goneToGround alongside position so
+    // undoLastMove / revertUnitMoves can restore them — per
+    // docs/features/vision-rules-tweaks.md §2.1 / §2.3, moving clears
+    // both, and undoing a move should restore the unit's prior state.
     const priorDugIn = unit instanceof Infantry ? unit.dugIn : undefined;
     this.state.moveHistory.push({
       unitId,
       priorPosition: unit.getPosition(),
+      priorGoneToGround: unit.goneToGround,
       ...(priorDugIn !== undefined && { priorDugIn }),
     });
     unit.setPosition(newPosition);
     if (unit instanceof Infantry && unit.dugIn) unit.setDugIn(false);
-    // Track for next turn's Gone to Ground check (vision-rules-tweaks §2.3).
+    unit.goneToGround = false;
     this.state.movedThisTurn.add(unitId);
   }
 
@@ -182,6 +194,7 @@ export class Game {
       const unit = this.state.getUnitById(entry.unitId);
       if (unit) {
         unit.setPosition(entry.priorPosition);
+        unit.goneToGround = entry.priorGoneToGround;
         // Restore dug-in if it was snapshotted (Infantry only). Tank moves
         // recorded undefined for priorDugIn, so the check is a no-op.
         if (entry.priorDugIn !== undefined && unit instanceof Infantry) {
@@ -207,6 +220,7 @@ export class Game {
     const earliest = this.state.moveHistory.find((e) => e.unitId === unitId);
     if (!earliest) return;
     unit.setPosition(earliest.priorPosition);
+    unit.goneToGround = earliest.priorGoneToGround;
     if (earliest.priorDugIn !== undefined && unit instanceof Infantry) {
       unit.setDugIn(earliest.priorDugIn);
     }
@@ -288,11 +302,15 @@ export class Game {
 
   toggleFire(unitId: UnitId): void {
     this.requirePhase("FireDeclare");
-    this.requireOwnUnit(unitId);
+    const unit = this.requireOwnUnit(unitId);
     if (this.state.firedThisTurn.has(unitId)) {
+      // Un-declaring fire: restore Gone to Ground only if the unit also
+      // didn't move this turn. If they moved, gtg stays false regardless.
       this.state.firedThisTurn.delete(unitId);
+      unit.goneToGround = !this.state.movedThisTurn.has(unitId);
     } else {
       this.state.firedThisTurn.add(unitId);
+      unit.goneToGround = false;
     }
   }
 
@@ -303,14 +321,11 @@ export class Game {
   endTurn(): void {
     this.requirePhase("FireDeclare");
     this.runVisionPhase(this.state.firedThisTurn);
-    // Snapshot this turn's moves and fires into the active team's slot so
-    // next turn's vision phase can run Gone to Ground checks against them
-    // (vision-rules-tweaks §2.3). Snapshots are per-team because each
-    // team's "last turn" is THEIR last turn, not the global most-recent
-    // turn — needed for correct GtG when checking the opponent's units.
-    const activeTeam = this.state.getActivePlayer();
-    this.state.movedLastTurnByTeam.set(activeTeam, new Set(this.state.movedThisTurn));
-    this.state.firedLastTurnByTeam.set(activeTeam, new Set(this.state.firedThisTurn));
+    // GtG is carried on Unit.goneToGround, set live during the turn by
+    // moveUnit/toggleFire/etc — no per-team snapshots needed. The flags
+    // persist into the opponent's turn (where vision reads them) and are
+    // re-evaluated at this player's NEXT startTurn (reset to true, then
+    // moves/fires flip back to false).
     this.state.firedThisTurn = new Set();
     this.state.movedThisTurn = new Set();
     this.state.activePlayerIndex = this.state.getNextPlayerIndex();
@@ -318,17 +333,13 @@ export class Game {
   }
 
   /**
-   * Public Gone to Ground eligibility check — same predicate used inside
-   * the vision pipeline. UI uses this to show the GtG line in the info
-   * menu and to render the token badge (vision-rules-tweaks §2.4).
+   * Public Gone to Ground check — the badge / info-menu shorthand. The
+   * actual stealth stack still only applies during a *concealed* discovery
+   * (per vision-rules-tweaks §2.3), but the per-unit flag itself is the
+   * eligibility part.
    */
   isGoneToGround(unit: Unit): boolean {
-    return isGoneToGroundEligible(
-      unit,
-      this.state.map,
-      this.state.movedLastTurnByTeam,
-      this.state.firedLastTurnByTeam,
-    );
+    return unit.goneToGround;
   }
 
   /**
@@ -375,7 +386,11 @@ export class Game {
     return unit;
   }
 
-  private buildUnit(params: CreateUnitParams, defaultDugIn: boolean): Unit {
+  private buildUnit(
+    params: CreateUnitParams,
+    defaultDugIn: boolean,
+    defaultGoneToGround: boolean,
+  ): Unit {
     const id = this.generateUnitId();
     const teamId = this.state.getActivePlayer();
     const common = {
@@ -383,6 +398,7 @@ export class Game {
       teamId,
       name: params.name,
       position: params.position,
+      goneToGround: defaultGoneToGround,
       ...(params.size !== undefined && { size: params.size }),
       ...(params.modifiers !== undefined && { modifiers: params.modifiers }),
     };
@@ -408,13 +424,7 @@ export class Game {
 
   private runVisionPhase(firedIds: ReadonlySet<UnitId>): void {
     const before = new Set(this.state.visionState.revealed);
-    this.visionCalculator.runVisionPhase(
-      this.state.visionState,
-      this.state.units,
-      firedIds,
-      this.state.movedLastTurnByTeam,
-      this.state.firedLastTurnByTeam,
-    );
+    this.visionCalculator.runVisionPhase(this.state.visionState, this.state.units, firedIds);
     const after = this.state.visionState.revealed;
     this.state.recentReveals = {
       added: [...after].filter((id) => !before.has(id)),

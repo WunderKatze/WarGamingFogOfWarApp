@@ -3,6 +3,7 @@ import type { Game } from "../../core/Game.js";
 import type { Point, UnitId, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
+import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
 import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
@@ -43,6 +44,7 @@ export function AddRemoveUnitsView() {
   } = useSelectionContext();
   const { showAllUnits } = useDebugContext();
   const activePlayer = game.state.getActivePlayer();
+  const { dugInUnitIds, goneToGroundUnitIds } = computeUnitStatusBadges(game);
   const ownUnits = game.state.units.filter((u) => u.teamId === activePlayer);
   const visible = getVisibleUnits(game, showAllUnits);
 
@@ -184,6 +186,8 @@ export function AddRemoveUnitsView() {
           units={visible}
           perspectiveTeamId={activePlayer}
           selectedUnitId={selectedUnitId}
+          dugInUnitIds={dugInUnitIds}
+          goneToGroundUnitIds={goneToGroundUnitIds}
           onUnitClick={handleUnitClick}
           onUnitHover={(u) => setHoveredUnitId(u?.id)}
           onHoveredTerrainChange={setHoveredTerrainHit}

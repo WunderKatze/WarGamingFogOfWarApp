@@ -20,6 +20,13 @@ const GAP_SYMBOL_TO_NAME = 2;
 const GAP_NAME_TO_STEM = 2;
 const GAP_STEM_TO_DOT = POSITION_DOT_RADIUS + 1;
 
+/** Diameter (in px) of the small status badges drawn beside the position dot. */
+const BADGE_RADIUS = 5;
+/** Horizontal gap between adjacent badges. */
+const BADGE_GAP = 2;
+/** Distance from the position dot to the left edge of the first badge. */
+const DOT_TO_BADGE = POSITION_DOT_RADIUS + 3;
+
 interface Props {
   unit: Unit;
   pixelsPerInch: number;
@@ -28,6 +35,17 @@ interface Props {
   fired?: boolean;
   /** True if this unit's position is publicly known (on the physical table). */
   revealed?: boolean;
+  /**
+   * Show the "D" (Dug-in) badge next to the position dot. Per
+   * vision-rules-tweaks §2.4 the marker is shown for own units only —
+   * callers are responsible for the friendly check.
+   */
+  dugIn?: boolean;
+  /**
+   * Show the "G" (Gone to Ground) badge next to the position dot. Same
+   * friendly-only contract as `dugIn` above.
+   */
+  goneToGround?: boolean;
   /**
    * If set, the token renders at this position (in inch coords) instead of
    * `unit.getPosition()`. Used during the Move-phase live preview so the same
@@ -68,6 +86,8 @@ export function UnitToken({
   selected = false,
   fired = false,
   revealed = false,
+  dugIn = false,
+  goneToGround = false,
   positionOverride,
   ghosted = false,
   easySelect = true,
@@ -198,6 +218,28 @@ export function UnitToken({
         listening={decorativeListening}
       />
 
+      {/* Status badges next to the dot — Dug-in ("D") and Gone to Ground ("G").
+          Always listening=false so they never intercept clicks; rendered
+          before the dot so the dot stays on top if there's any overlap. */}
+      {(dugIn || goneToGround) && (
+        <>
+          {dugIn && (
+            <StatusBadge
+              x={DOT_TO_BADGE + BADGE_RADIUS}
+              letter="D"
+              color="#8B4513"
+            />
+          )}
+          {goneToGround && (
+            <StatusBadge
+              x={DOT_TO_BADGE + BADGE_RADIUS + (dugIn ? 2 * BADGE_RADIUS + BADGE_GAP : 0)}
+              letter="G"
+              color="#2d5e2d"
+            />
+          )}
+        </>
+      )}
+
       {/* Position dot at the unit's actual (x, y), drawn last so it's on top.
           Always listens — in strict mode it's the only clickable element. */}
       <Circle
@@ -205,6 +247,36 @@ export function UnitToken({
         fill={dotColor}
         onClick={handleClick}
         onTap={handleClick}
+      />
+    </Group>
+  );
+}
+
+/**
+ * A small filled circle with a single capital letter — used for the
+ * dug-in and Gone to Ground markers. Sized to read at typical zoom
+ * levels without crowding the position dot.
+ */
+function StatusBadge({ x, letter, color }: { x: number; letter: string; color: string }) {
+  return (
+    <Group x={x} y={0} listening={false}>
+      <Circle
+        radius={BADGE_RADIUS}
+        fill={color}
+        stroke="white"
+        strokeWidth={0.5}
+      />
+      <Text
+        text={letter}
+        x={-BADGE_RADIUS}
+        y={-BADGE_RADIUS + 0.5}
+        width={2 * BADGE_RADIUS}
+        height={2 * BADGE_RADIUS}
+        align="center"
+        verticalAlign="middle"
+        fontSize={7}
+        fontStyle="bold"
+        fill="white"
       />
     </Group>
   );

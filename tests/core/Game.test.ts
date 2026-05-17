@@ -341,7 +341,7 @@ describe("Game — Move phase", () => {
     const g = setupAtMove();
     g.moveUnit("u1", p(5, 5));  // u1 is a Tank
     expect(g.state.moveHistory).toEqual([
-      { unitId: "u1", priorPosition: { x: 0, y: 0 } },
+      { unitId: "u1", priorPosition: { x: 0, y: 0 }, priorGoneToGround: true },
     ]);
   });
 
@@ -379,7 +379,7 @@ describe("Game — move history and undo", () => {
     const g = setupAtMove();
     g.moveUnit("u1", p(5, 5));
     expect(g.state.moveHistory).toEqual([
-      { unitId: "u1", priorPosition: { x: 0, y: 0 } },
+      { unitId: "u1", priorPosition: { x: 0, y: 0 }, priorGoneToGround: true },
     ]);
   });
 
@@ -457,9 +457,15 @@ describe("Game — move history and undo", () => {
     // Infantry untouched at its post-move position; its entry still on the stack.
     expect(g.state.getUnitById(inf.id)?.getPosition()).toEqual({ x: 2, y: 2 });
     // Infantry has dugIn recorded too (priorDugIn=false because mid-game
-    // createUnit defaults to not-dug-in).
+    // createUnit defaults to not-dug-in). priorGoneToGround=false because
+    // createUnit also sets the in-flux GtG=false default.
     expect(g.state.moveHistory).toEqual([
-      { unitId: inf.id, priorPosition: { x: 1, y: 1 }, priorDugIn: false },
+      {
+        unitId: inf.id,
+        priorPosition: { x: 1, y: 1 },
+        priorGoneToGround: false,
+        priorDugIn: false,
+      },
     ]);
   });
 

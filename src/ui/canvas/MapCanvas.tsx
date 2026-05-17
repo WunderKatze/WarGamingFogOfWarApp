@@ -30,6 +30,10 @@ interface Props {
   selectedUnitId?: UnitId | undefined;
   firedUnitIds?: ReadonlySet<UnitId> | undefined;
   revealedUnitIds?: ReadonlySet<UnitId> | undefined;
+  /** Units that should render the Dug-in status badge. Caller is responsible for the friendly-only filter (vision-rules-tweaks §2.4). */
+  dugInUnitIds?: ReadonlySet<UnitId> | undefined;
+  /** Units that should render the Gone to Ground status badge. Friendly-only filter is the caller's responsibility. */
+  goneToGroundUnitIds?: ReadonlySet<UnitId> | undefined;
   /** When set, this unit renders at reduced opacity in the units layer. */
   ghostUnitId?: UnitId | undefined;
   /**
@@ -73,6 +77,8 @@ export function MapCanvas({
   selectedUnitId,
   firedUnitIds,
   revealedUnitIds,
+  dugInUnitIds,
+  goneToGroundUnitIds,
   ghostUnitId,
   strictUnitSelect = false,
   onUnitClick,
@@ -209,6 +215,8 @@ export function MapCanvas({
                   selected={u.id === selectedUnitId}
                   fired={firedUnitIds?.has(u.id) ?? false}
                   revealed={revealedUnitIds?.has(u.id) ?? false}
+                  dugIn={dugInUnitIds?.has(u.id) ?? false}
+                  goneToGround={goneToGroundUnitIds?.has(u.id) ?? false}
                   ghosted={u.id === ghostUnitId}
                   easySelect={!strictUnitSelect}
                   onClick={() => onUnitClick?.(u)}

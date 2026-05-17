@@ -109,9 +109,18 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
     : revealed ? "Revealed" : "Detected";
 
   const stealth = getStealthAtPosition(unit, position, game.state.map);
-  const gtg = game.isGoneToGround(unit);
-  const gtgMultiplier = gtg ? getRules().goneToGroundStealthModifier : 1;
-  const totalStealth = stealth.value * gtgMultiplier;
+  // GtG only stacks during *concealed* discovery checks — see
+  // vision-rules-tweaks §2.3. At this position, "concealed" means the
+  // highest applicable stealth modifier (terrain + inherent) is >1. The
+  // unit can be gone-to-ground without that being true (e.g. a GtG tank
+  // in the open). Reflect that in the display: badge says "is GtG",
+  // stealth line only shows the stacked product when concealment makes
+  // it real.
+  const isConcealedHere = stealth.value > 1;
+  const isGtg = game.isGoneToGround(unit);
+  const gtgApplies = isGtg && isConcealedHere;
+  const gtgMultiplier = getRules().goneToGroundStealthModifier;
+  const totalStealth = stealth.value * (gtgApplies ? gtgMultiplier : 1);
   const pos = position;
 
   return (
@@ -132,7 +141,7 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
         <span>·</span>
         <span>{visionLabel}</span>
         <span>·</span>
-        {gtg ? (
+        {gtgApplies ? (
           <span>
             Stealth ×{stealth.value} ({stealth.source}) × ×{gtgMultiplier} (Gone to Ground) = ×{totalStealth}
           </span>
@@ -140,6 +149,13 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
           <span>Stealth ×{stealth.value} ({stealth.source})</span>
         )}
       </div>
+      {isGtg && (
+        <div style={detailRowStyle}>
+          <span style={gtgInfoStyle}>
+            Gone to Ground · ×{gtgMultiplier} stealth if concealed by terrain
+          </span>
+        </div>
+      )}
       {unit instanceof Infantry && (
         <div style={detailRowStyle}>
           {isFriendly ? (
@@ -329,4 +345,10 @@ const checkboxLabelStyle: CSSProperties = {
   fontSize: theme.fontSize.sm,
   cursor: "pointer",
   userSelect: "none",
+};
+
+const gtgInfoStyle: CSSProperties = {
+  fontSize: theme.fontSize.sm,
+  color: "#2d5e2d",
+  fontStyle: "italic",
 };

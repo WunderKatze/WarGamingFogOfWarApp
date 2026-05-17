@@ -358,11 +358,10 @@ describe("VisionCalculator.runVisionPhase — carry-over", () => {
 
 describe("VisionCalculator — Gone to Ground", () => {
   // A 30"-wide Short Terrain strip from x=10 to x=40. Short Terrain never
-  // blocks sight (so we can rely on discover, not see) and its stealth
+  // blocks sight (so we rely on discover, not see) and its stealth
   // multiplier is 2. Tank intrinsic stealth = 1, vision = 48.
   // Observer at (0, 50), target at (18, 50): ray crosses 8" of short
-  // terrain (well past the 2" grace), target is inside the polygon (so
-  // GtG-eligible when the snapshots clear it).
+  // terrain (well past the 2" grace), target inside the polygon.
   //   Without GtG: range = 48 / 2     = 24" → 18" detected.
   //   With    GtG: range = 48 / (2*2) = 12" → 18" NOT detected.
   const coverMap = () => {
@@ -370,61 +369,56 @@ describe("VisionCalculator — Gone to Ground", () => {
     return new GameMap({ width: 1000, height: 100, polygons: [strip] });
   };
 
-  it("stacks GtG on top of the single-highest terrain mod, blocking discovery that would otherwise succeed", () => {
+  it("stacks GtG on top of the single-highest terrain mod when target is concealed", () => {
     const vc = new VisionCalculator(coverMap());
     const observer = tankAt("A1", p(0, 50), "A");
     const target = tankAt("B1", p(18, 50), "B");
 
-    // Baseline with B explicitly disqualified (moved last turn) → no GtG
-    // → A discovers B at 18".
+    // Baseline: target NOT gone to ground → no GtG → A discovers B at 18".
+    target.goneToGround = false;
     const baseState = createEmptyVisionState();
-    const movedB = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set(["B1"])]]);
-    const noFired = new Map<TeamId, ReadonlySet<UnitId>>();
-    vc.runVisionPhase(baseState, [observer, target], new Set(), movedB, noFired);
+    vc.runVisionPhase(baseState, [observer, target], new Set());
     expectIndividual(baseState, "A1", ["B1"]);
 
-    // With B clean (no move, no fire last turn) → GtG kicks in → stealth
-    // doubles to ×4 → A does NOT discover B at 18".
+    // With B gone to ground → GtG stacks (target is concealed by the strip)
+    // → stealth doubles to ×4 → A does NOT discover B at 18".
+    target.goneToGround = true;
     const gtgState = createEmptyVisionState();
-    const cleanMoved = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set()]]);
-    const cleanFired = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set()]]);
-    vc.runVisionPhase(gtgState, [observer, target], new Set(), cleanMoved, cleanFired);
+    vc.runVisionPhase(gtgState, [observer, target], new Set());
     expectIndividual(gtgState, "A1", []);
   });
 
-  it("does not apply GtG when the target moved last turn", () => {
-    const vc = new VisionCalculator(coverMap());
-    const observer = tankAt("A1", p(0, 50), "A");
-    const target = tankAt("B1", p(18, 50), "B");
-    const state = createEmptyVisionState();
-    const moved = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set(["B1"])]]);
-    const fired = new Map<TeamId, ReadonlySet<UnitId>>();
-    vc.runVisionPhase(state, [observer, target], new Set(), moved, fired);
-    expectIndividual(state, "A1", ["B1"]);
-  });
-
-  it("does not apply GtG when the target fired last turn", () => {
-    const vc = new VisionCalculator(coverMap());
-    const observer = tankAt("A1", p(0, 50), "A");
-    const target = tankAt("B1", p(18, 50), "B");
-    const state = createEmptyVisionState();
-    const moved = new Map<TeamId, ReadonlySet<UnitId>>();
-    const fired = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set(["B1"])]]);
-    vc.runVisionPhase(state, [observer, target], new Set(), moved, fired);
-    expectIndividual(state, "A1", ["B1"]);
-  });
-
-  it("does not apply GtG when the target is not in a cover-providing polygon", () => {
-    // Same observer / target positions as the snapshots-clear case above,
-    // but the cover-polygon map has been replaced with an empty map, so
-    // GtG can't trigger even though the snapshots would allow it.
+  it("does NOT apply GtG when the target is in the open (no concealment for this ray)", () => {
+    // No cover map; target in the open. Even with goneToGround=true, no
+    // per-ray concealment exists, so GtG must not stack.
     const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
     const observer = tankAt("A1", p(0, 50), "A");
-    const target = tankAt("B1", p(40, 50), "B"); // open ground
+    const target = tankAt("B1", p(40, 50), "B");
+    target.goneToGround = true;
+
     const state = createEmptyVisionState();
-    const moved = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set()]]);
-    const fired = new Map<TeamId, ReadonlySet<UnitId>>([["B", new Set()]]);
-    vc.runVisionPhase(state, [observer, target], new Set(), moved, fired);
+    vc.runVisionPhase(state, [observer, target], new Set());
     expectIndividual(state, "A1", ["B1"]);
+  });
+
+  it("dug-in inherent concealment counts as cover for GtG stacking", () => {
+    // Open map, target is dug-in Infantry. Inherent concealment >1, so the
+    // discover ray is "concealed" → GtG should stack.
+    // Infantry vision = 48, intrinsic stealth = 4/3, dug-in = 2.
+    // Without GtG: range = 48 / (4/3 × 2)  = 18"   → 16" detected.
+    // With    GtG: range = 48 / (4/3 × 4)  = 9"    → 16" NOT detected.
+    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
+    const observer = tankAt("A1", p(0, 50), "A");
+    const target = infantryAt("B1", p(16, 50), /* dugIn */ true, "B");
+
+    target.goneToGround = false;
+    const baseState = createEmptyVisionState();
+    vc.runVisionPhase(baseState, [observer, target], new Set());
+    expectIndividual(baseState, "A1", ["B1"]);
+
+    target.goneToGround = true;
+    const gtgState = createEmptyVisionState();
+    vc.runVisionPhase(gtgState, [observer, target], new Set());
+    expectIndividual(gtgState, "A1", []);
   });
 });

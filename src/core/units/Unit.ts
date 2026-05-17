@@ -8,6 +8,13 @@ export interface UnitInit {
   position: Point;
   size?: UnitSize;
   modifiers?: Iterable<Modifier>;
+  /**
+   * Initial Gone to Ground state. `true` for units placed during Deployment
+   * (settled), `false` for units added mid-game via Game.createUnit (in
+   * flux). Game owns the lifecycle thereafter — see
+   * docs/features/vision-rules-tweaks.md §2.3.
+   */
+  goneToGround?: boolean;
 }
 
 export abstract class Unit {
@@ -18,6 +25,14 @@ export abstract class Unit {
   name: string;
   readonly size: UnitSize;
   readonly modifiers: ReadonlySet<Modifier>;
+  /**
+   * Gone to Ground flag — true if the unit didn't move or fire during its
+   * owner's most recent turn. Game mutates this directly via moveUnit,
+   * toggleFire, startTurn (reset), and the undo paths. VisionCalculator
+   * reads it to apply the GtG stealth stack when the per-ray discovery is
+   * already concealed. See docs/features/vision-rules-tweaks.md §2.3.
+   */
+  goneToGround: boolean;
 
   protected _position: Point;
 
@@ -28,6 +43,7 @@ export abstract class Unit {
     this.size = init.size ?? "Platoon";
     this._position = init.position;
     this.modifiers = new Set(init.modifiers ?? []);
+    this.goneToGround = init.goneToGround ?? false;
   }
 
   getPosition(): Point {

@@ -2,6 +2,7 @@ import type { Game } from "../../core/Game.js";
 import type { UnitId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
+import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
 import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
@@ -29,6 +30,7 @@ export function FireDeclareView() {
   const active = game.state.getActivePlayer();
   const visible = getVisibleUnits(game, showAllUnits);
   const fired = game.state.firedThisTurn;
+  const { dugInUnitIds, goneToGroundUnitIds } = computeUnitStatusBadges(game);
 
   const handleUnitClick = (unit: Unit) => {
     // Selection toggles on every visible unit, own or enemy.
@@ -81,6 +83,8 @@ export function FireDeclareView() {
           selectedUnitId={selectedUnitId}
           firedUnitIds={fired}
           revealedUnitIds={game.state.visionState.revealed}
+          dugInUnitIds={dugInUnitIds}
+          goneToGroundUnitIds={goneToGroundUnitIds}
           onUnitClick={handleUnitClick}
           onUnitHover={(u) => setHoveredUnitId(u?.id)}
           onHoveredTerrainChange={setHoveredTerrainHit}

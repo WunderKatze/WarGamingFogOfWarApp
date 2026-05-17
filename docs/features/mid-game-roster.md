@@ -1,6 +1,6 @@
 # Feature: Mid-game roster (stop-gap)
 
-**Status:** Approved
+**Status:** Complete
 **Target Version:** v1
 **Owner:** Ryan
 **Last Updated:** 2026-05-16
@@ -29,10 +29,11 @@ This patch adds:
 
 ### 2.1 Add a unit during Move
 
-- The Move-phase sidebar gains a *Pen* section mirroring the Deploy view: Name (optional), Type, Size, Recon, Dug-in toggle.
-- Clicking on empty map space (no own-unit under the cursor) places a new unit per the pen settings, owned by the active player. Infantry default to **dugIn = false** during Move (existing `createUnit` default), since a unit just appearing isn't fortified.
+- The Move-phase sidebar gains a *Pen* section at the top mirroring the Deploy view: Name (optional), Type, Size, Recon, Dug-in toggle.
+- Placement is **explicit** — the pen has a **Place new unit** button. Clicking it primes the next empty-map click; the click then creates the unit instead of doing the normal commit-move / clear-selection. Without priming, empty clicks keep their existing semantics, so a player who never adds units mid-Move sees no behavior change. Escape cancels the priming. (See §4 decision 5 for why this isn't a one-click empty-map-spawns flow.)
+- Infantry default to **dugIn = false** during Move (existing `createUnit` default), since a unit just appearing isn't fortified.
 - The added unit doesn't appear in any team's vision lists until the next vision-phase tick (which runs at `endMove`). This is intentional: the player can't get free reveals by spawning a unit, peeking, and removing it.
-- All the pen-rhythm rules from the Deploy stop-gap carry over: blank Name auto-generates, non-blank Name is consumed on placement, Clone bumps the pen Name, etc.
+- Blank Name auto-generates (`I-N`, `T-N`); non-blank Name is consumed on placement. No Clone tool here — clone is Deploy-only in v1; mid-game one-offs (a single bailout, a single reinforcement) don't need it.
 
 ### 2.2 Remove a unit during Move
 
@@ -79,6 +80,8 @@ This patch adds:
 | Add/Remove → Move handoff: an enemy unit was in the previous-turn vision list but isn't visible to any current-turn observer | Standard reveal rule — `recentReveals.removed` will include it on the next Transition, telling the opponent to remove the token from the table. The Add/Remove Units phase doesn't change this; vision still authoritatively decides. |
 | First Add/Remove Units phase right after first-player-select | Runs normally. Player has nothing to adjust on turn 1 → click End → Move. |
 | A unit added during Add/Remove Units or Move (vs deployed in Deploy) — counts as "moved last turn" for GtG and similar? | **Yes** for mid-game additions; **no** for deployed units. See §4 dec. 4 and [vision-rules-tweaks.md](vision-rules-tweaks.md) §3. |
+| Move phase, Place-new-unit primed, then the player starts an active move on an existing unit | Active move takes priority — the next click commits the move (or adds a waypoint), priming is silently ignored. The player can re-press Place after the move resolves. |
+| Move phase, Place-new-unit primed, then the player clicks an existing own unit | Selection / active-move starts as today; priming sticks but is overridden by the move-in-progress rule above. Cleanest behavior is to clear priming on selection change — left as a stretch UX polish since the active-move handling already protects against accidental spawn. |
 
 ---
 
@@ -88,6 +91,7 @@ This patch adds:
 2. **The Add/Remove Units phase always runs**, including turn 1 right after first-player-select. State-machine consistency over saving one click; the turn-1 case is just an immediate End.
 3. **Move-phase add UI lives at the top of the sidebar** (above the existing selected-unit / movement controls), mirroring the Deploy sidebar's pen-at-top ordering for muscle-memory continuity.
 4. **Units added during Add/Remove Units or Move count as "moved last turn"** for [vision-rules-tweaks.md](vision-rules-tweaks.md)'s Gone to Ground check (and any future "stationary last turn" rule). **Units deployed during Deployment do NOT count as moved** on the first Move turn — they had time to settle in. This makes a fresh bailout / reinforcement vulnerable on the turn it arrives but lets deployed units immediately benefit from cover-stacking modifiers.
+5. **Move-phase add uses explicit priming (Place new unit button) rather than every-empty-click-spawns.** Empty-map click in Move already has meaning (commit-move / clear-selection); silently overloading it would let the player accidentally spawn units while panning. Priming is one extra click per placement but eliminates the surprise. The Add/Remove Units phase has no such conflict, so its placements ARE one-click on empty map.
 
 ---
 

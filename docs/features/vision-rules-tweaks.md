@@ -1,9 +1,9 @@
 # Feature: Vision rules tweaks (V1 polish)
 
-**Status:** Approved
+**Status:** Complete
 **Target Version:** v1
 **Owner:** Ryan
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-05-17
 
 > **Scope note.** Three rule changes to bring the vision model to V1 playability. None is a system overhaul: 2.1 and 2.2 adjust existing per-unit / per-terrain hooks, 2.3 introduces a new modifier source ("Gone to Ground") that is the first **stacking** modifier — a small but meaningful break from today's "single highest" pool rule.
 
@@ -41,23 +41,31 @@ Three issues surfaced in playtest:
 
 ### 2.3 Gone to Ground
 
-- A new stealth modifier applied to **Infantry and Tank** units (every unit type in V1) when **all three** are true:
-  1. The unit is currently sitting inside at least one polygon whose stealth multiplier is `>1` (i.e. cover-providing terrain — Building, Tall Woods, Short Terrain, or any future polygon kind).
-  2. The unit did **not** move in the previous turn AND was **not** added mid-game during the previous turn. A unit deployed during the Deployment phase qualifies on the first Move turn (deployment isn't movement). A unit added during a previous turn's Add/Remove Units or Move phase counts as "moved" — it didn't have time to settle in.
-  3. The unit did **not** fire in the previous turn (or has never fired).
-- Effect: a **multiplicative stack** with the unit's other stealth contributors (terrain, dug-in, etc.). This is the first stacking modifier — every other stealth source is currently subject to "single highest." GtG multiplies on top of whichever single-highest source already applies.
-- Default multiplier value: **`2`** (placeholder; vision-value rebalance pending — see §4 dec. 1).
-- Display: InfoMenu shows the combined stealth as `×X (terrain) × ×Y (GtG) = ×Z`, per §4 dec. 5. A token marker is also drawn — see §2.4.
+**Definition.** A unit is "gone to ground" if it didn't move or fire during its owner's most recent active turn. The state is per-unit and re-evaluated every own-turn — it isn't a permanent buff. ("Turn" here means one player's half of the round; B moving units during B's turn doesn't affect any of A's units' GtG state.)
+
+**Concealment (new terminology).** A discovery calculation is **concealed** when the per-ray single-highest stealth contributor (terrain modifiers along the ray + the target's inherent modifier like dug-in) is > 1. Concealment is therefore per-(observer, target) ray — a target can be concealed from one observer but not another.
+
+**Stealth effect.** When a GtG unit is the target of a discovery calculation AND that calculation is concealed, the GtG modifier (`goneToGroundStealthModifier`, default `2`) stacks *multiplicatively* on top of the single-highest concealment. If the calculation is not concealed (the target's in the open and not dug-in), GtG contributes nothing — a GtG tank in open ground gets no stealth bonus, but the same tank viewed across a short wall or through short terrain does.
+
+**Lifecycle of the per-unit flag.**
+
+- `deployUnit` initializes `goneToGround = true` (units placed during Deployment are considered settled).
+- `createUnit` (mid-game add via Move or Add/Remove Units phase) initializes `goneToGround = false` (in flux).
+- `moveUnit` sets `goneToGround = false`.
+- `toggleFire` sets `goneToGround = false` when fire is declared; on un-declare it restores to `true` if the unit also didn't move this turn.
+- `undoLastMove` and `revertUnitMoves` restore the flag from a `priorGoneToGround` snapshot taken in the move-history entry.
+- `startTurn` for the active player resets all that player's units' flags back to `true` (every own-turn opens with a fresh chance — if they remain static through the turn, they end it GtG).
+
+Default multiplier: **`2`** (placeholder; vision-value rebalance pending — see §4 dec. 1). Displayed in the InfoMenu's stealth line as `×X (terrain) × ×Y (GtG) = ×Z` when GtG actually applies (§4 dec. 5), plus an always-on "Gone to Ground — ×N stealth if concealed by terrain" hint row whenever the selected/hovered unit is gone to ground (so the per-ray rule is visible even when concealment doesn't currently apply at the unit's standing position). A token marker also draws — see §2.4.
 
 ### 2.4 Token visual markers for dug-in and Gone to Ground
 
-- Both modifiers are state-derived and easy to lose track of; on a busy table, players want to see at a glance which of their units are dug in and which qualify for GtG.
-- Each token gains up to two small badges rendered next to the milsymbol:
-  - **Dug-in** marker for any Infantry whose `dugIn === true`.
-  - **GtG** marker for any Infantry or Tank that currently satisfies the §2.3 conditions.
-- Both markers appear on **own units** by default. For revealed enemy units the GtG marker is hidden (since GtG state depends on per-side history the opponent doesn't fully see); the dug-in marker is also hidden for revealed enemies (consistent with not revealing posture). This keeps the markers a player-side tool, not an information leak — revisit if the v2 reveal-cascade rules ever change what's known.
-- The InfoMenu also calls out both state flags in the existing detail row (already shows dug-in toggle; gains a "Gone to Ground" line when applicable).
-- Visual specifics (icon glyphs, color, placement) are intentionally not pinned in the doc — they'll be tuned in the implementation pass with whatever reads cleanly at typical zoom levels.
+- Both modifiers are state-derived and easy to lose track of; on a busy table, players want to see at a glance which units are dug in and which are gone to ground.
+- Each token gains up to two small badges next to the position dot:
+  - **Dug-in** ("D") marker for any Infantry whose `dugIn === true`.
+  - **GtG** ("G") marker for any unit whose `goneToGround === true`.
+- Markers are visible on **every unit MapCanvas renders** — own units AND revealed enemies. Hidden enemies (not visible to the active player) don't render their tokens at all, so they trivially don't show markers. Revealed enemies' posture is shown so the opponent has full information when an enemy reveals.
+- The InfoMenu also displays both state lines: the existing dug-in toggle row, plus a green italic "Gone to Ground · ×N stealth if concealed by terrain" hint whenever a GtG unit is selected/hovered (the per-ray "if concealed" qualifier needs to stay visible because the stealth line only shows the stacked product when concealment actually applies at the unit's standing position).
 
 ---
 
@@ -65,29 +73,30 @@ Three issues surfaced in playtest:
 
 | Scenario | Behavior |
 |---|---|
-| Unit dug-in, moved, then position-undone via `undoLastMove` | `dugIn` restored alongside position (§2.1). |
-| Unit dug-in, moved 0.1″ (precision touch) | Counts as a move; `dugIn` clears. We don't gate on minimum distance — the player either moved or didn't. |
+| Unit dug-in, moved, then position-undone via `undoLastMove` | `dugIn` restored alongside position (§2.1). `goneToGround` is also restored from the same move-history entry. |
+| Unit dug-in, moved 0.1″ (precision touch) | Counts as a move; `dugIn` and `goneToGround` both clear. We don't gate on minimum distance — the player either moved or didn't. |
 | Unit dug-in, repositioned during Deploy via `repositionDeployedUnit` | `dugIn` is preserved — Deploy reposition is re-deployment, not movement (§4 dec. 3). |
-| GtG: unit just deployed last turn (so there was no "last turn" for it) | Counts as "did not move last turn" and "did not fire last turn." Eligible if currently in cover. |
-| GtG: unit added mid-game during the previous turn (Add/Remove Units or Move) | Counts as having **moved** last turn — GtG does not apply on the following turn. See [mid-game-roster.md](mid-game-roster.md) §4 dec. 4 for the cross-doc rationale. |
-| GtG: unit fired in the FireDeclare phase that just ended | That fire counts as "last turn" once the turn ends; the *following* turn it loses GtG. The current turn (where the fire is being declared) does not retroactively lose GtG. |
-| GtG: unit in cover but cover only applies along certain rays (e.g. a wall) | GtG triggers on **target-in-concealing-polygon** only — walls don't count. Simpler to reason about and matches the "static fortified position" intuition. |
-| GtG: unit moves *out* of cover this turn | Move resolves first → unit no longer in cover → GtG check fails this turn (and `movedLastTurn` will mark them next turn anyway). |
-| GtG: snapshot point in the phase machine | `movedLastTurn` / `firedLastTurn` snapshot at `endTurn`, then are read by the next player's vision phase (which now runs at `endAddRemoveUnits`, not at startTurn). Same logical position relative to the player's first vision recompute. |
+| GtG: unit deployed during Deployment | `deployUnit` initializes `goneToGround = true`, so they're GtG on the first Move turn if they remain static through it (a static turn ends with the flag still true). |
+| GtG: unit added mid-game during the previous turn (Add/Remove Units or Move) | `createUnit` initializes `goneToGround = false`. Flag stays false through the rest of that turn and the opponent's turn. On the unit's owner's NEXT startTurn the flag resets to true; if the unit stays static through that turn, it ends GtG. |
+| GtG: unit fired in the FireDeclare phase | `toggleFire` flips the flag to false immediately on declare. Un-declare restores to true only if the unit also didn't move this turn. |
+| GtG: unit moves *out* of cover this turn | Move flips `goneToGround = false` AND the unit is no longer in cover — both fail-safes against GtG applying. |
+| GtG: unit in cover but cover only applies along certain rays (e.g. a wall) | The per-ray concealment check handles this naturally — GtG stacks for rays that ARE concealed (by the wall), doesn't stack for rays that aren't. |
+| GtG: vision phase reads the flag at three points (`endAddRemoveUnits`, `endMove`, `endTurn`) | Each vision phase sees whatever value the flag has at the moment — the live updates from `moveUnit` / `toggleFire` mean the flag is always current. |
 | 2.2: Ray exits and re-enters the same concave polygon | `segmentLengthInsidePolygon` already sums all interior portions; the grace check applies to the total. ≤2″ total = no cover. |
 | 2.2: Ray entirely inside the polygon (both observer and target inside) | The full ray length is "inside"; if that distance >2″ the cover applies. If observer and target are <2″ apart inside the same woods, neither penalises the other. |
-| Token marker (§2.4) on revealed enemy unit | Hidden — posture is player-side info that doesn't leak with the reveal. |
+| Token marker on revealed enemy unit | Visible — posture is information the opponent has earned by getting the reveal (§4 dec. 6). |
 
 ---
 
 ## 4. Recorded decisions
 
-1. **Gone to Ground multiplier defaults to `2`** as a placeholder while the broader vision-value rebalance is in progress. Tunable at runtime via the Adjust Vision Rules editor; the v1 ship just needs a number that's clearly distinguishable from `1` so the mechanic is observable in play.
+1. **Gone to Ground multiplier defaults to `2`** as a placeholder while the broader vision-value rebalance is in progress. Tunable at runtime via the Adjust Vision Rules editor; the v1 ship just needs a number clearly distinguishable from `1` so the mechanic is observable in play.
 2. **Building gets no edge-distance grace** (§2.2). The existing Building catalog entry already only applies its stealth when the target unit is *inside* the polygon (`containsPoint(to)`), which is the same "hard to see in, easy to see out" semantic that grace gives Tall Woods / Short Terrain. Walls similarly don't fit the grace model.
 3. **Dug-in is preserved across Deploy-phase reposition** (§2.1). `repositionDeployedUnit` is re-deployment, not movement — clearing dug-in would force a re-toggle every nudge during setup. `moveUnit` (Move phase) still clears it as the rule's headline behavior.
-4. **GtG counts mid-game-added units as "moved last turn"** but **not units placed during Deployment** (cross-doc with [mid-game-roster.md](mid-game-roster.md) §4 dec. 4). A bailout / reinforcement is in flux; a deployed unit had time to settle.
-5. **Stack display in the InfoMenu is verbose**: `×X (terrain) × ×Y (GtG) = ×Z`. First-encounter clarity over compactness; can shorten later if it crowds the panel.
-6. **Token visual markers for dug-in and GtG** (§2.4). Both states are easy to lose track of mid-game; small badges on own units' tokens make them glanceable. Hidden for revealed enemy units to avoid leaking posture.
+4. **GtG is a per-unit flag, not a derived predicate.** Each unit owns a `goneToGround: boolean` mutated live by Game actions (`deployUnit`, `createUnit`, `moveUnit`, `toggleFire`, `startTurn` reset, undo paths). The vision pipeline only consults that single flag — no per-team "moved last turn" snapshot maps. Re-evaluation happens at the unit's owner's next `startTurn`, which resets all of that player's units to `true`, then any action during the turn flips them back to `false`.
+5. **Stack display in the InfoMenu is verbose**: `×X (terrain) × ×Y (GtG) = ×Z`. Shown only when concealment actually applies at the unit's standing position. A separate always-on green hint row says "Gone to Ground · ×N stealth if concealed by terrain" so the per-ray rule is visible even when the standing-position concealment doesn't fire.
+6. **Token visual markers are shown on every rendered unit** (own and revealed enemies). Hidden enemies don't render tokens at all, so they trivially don't leak posture. Revealed enemies' posture IS exposed — the opponent earned that information by getting the reveal, and seeing whether a revealed unit is dug-in or GtG is part of the strategic information they should have.
+7. **GtG only stacks during a *concealed* discovery.** The per-ray check is `max(inherentMod, ...terrainMods) > 1` — i.e. the same single-highest pool the regular stealth calc uses, but as a binary "is there any concealment for this ray?" gate on the GtG multiplier. Dug-in counts because it's part of the inherent modifier. A GtG tank in the open with no inherent and no terrain mods gets no GtG; the same tank viewed across a short wall or through woods does.
 
 ---
 
@@ -122,32 +131,45 @@ goneToGroundStealthModifier: 2,         // §2.3, §4 dec. 1 (placeholder)
 
 In `terrainCatalog.ts`, change TallWoods and ShortTerrain's `appliesAsConcealment` to compare `segmentLengthInsidePolygon` against `getRules().terrainEdgeGraceDistance`. Update the `ruleDescription` getter to mention the grace.
 
-### 7.3 State additions for GtG
+### 7.3 GtG state
 
-`GameState` gains:
-- `movedThisTurn: Set<UnitId>` — populated by `Game.moveUnit` AND by `Game.createUnit` (mid-game adds count as "moved", per §4 dec. 4). Cleared by `startTurn`.
-- `movedLastTurn: ReadonlySet<UnitId>` — snapshotted from `movedThisTurn` at `endTurn`.
-- `firedLastTurn: ReadonlySet<UnitId>` — snapshotted from `firedThisTurn` at `endTurn` (just before it's cleared).
+Per §4 dec. 4 the GtG state lives directly on `Unit` as a mutable `goneToGround: boolean` field. The Game class owns the lifecycle:
 
-Note that vision phases happen at multiple points: `endAddRemoveUnits` and `endMove` and `endTurn`. All of them must use the same `movedLastTurn` / `firedLastTurn` snapshot established at the prior `endTurn` for the GtG check to be stable across the turn.
+- `deployUnit` → `unit.goneToGround = true`
+- `createUnit` → `unit.goneToGround = false`
+- `moveUnit` → snapshot prior value into the move-history entry's `priorGoneToGround`, then set `unit.goneToGround = false`
+- `toggleFire` on declare → `unit.goneToGround = false`; on un-declare → restore to `!state.movedThisTurn.has(unitId)`
+- `startTurn` for active player → for every own unit, `unit.goneToGround = true` (fresh chance)
+- `undoLastMove` and `revertUnitMoves` → restore `priorGoneToGround` from the snapshot
+
+`GameState.movedThisTurn` (Set\<UnitId\>) is retained for the `toggleFire` un-declare restoration; no per-team "last turn" snapshot maps are needed.
 
 ### 7.4 Vision pipeline (§2.3)
 
-`getConcealmentModifiersAlongRay(from, target)` still returns the per-ray modifier list and the caller takes the single highest. After picking the highest, the caller checks GtG eligibility for the **target** unit and multiplies the highest by `goneToGroundStealthModifier` when eligible. GtG eligibility is a pure function of `state.movedLastTurn`, `state.firedLastTurn`, target unit's type, and "is target inside any polygon with stealth >1" (cheap polygon-containment scan).
-
-### 7.5 InfoMenu display
-
-`getStealthAtPosition` extends from `{value, source}` to:
+`VisionCalculator.discover` reads `target.goneToGround` directly:
 
 ```ts
-interface StealthAtPosition {
-  primary: { value: number; source: string };
-  goneToGround?: { value: number };
-  total: number;
+const highestMod = Math.max(1, inherentMod, ...terrainMods);
+if (target.goneToGround && highestMod > 1) {
+  highestMod *= getRules().goneToGroundStealthModifier;
 }
 ```
 
-Renderer shows `×primary (source)` and, if GtG applies, ` × ×gtg (Gone to Ground) = ×total`.
+The `highestMod > 1` gate is the per-ray concealment check (§4 dec. 7). `runVisionPhase` takes no additional GtG-related parameters — everything it needs is on the units themselves.
+
+### 7.5 InfoMenu display
+
+`getStealthAtPosition` returns the standing-position single-highest as before. The view combines that with `game.isGoneToGround(unit)`:
+
+```ts
+const isConcealedHere = stealth.value > 1;
+const isGtg = game.isGoneToGround(unit);
+const gtgApplies = isGtg && isConcealedHere;
+```
+
+Renderer:
+- Stealth row: `×stealth.value (stealth.source)` always; `× ×gtgMult (Gone to Ground) = ×total` appended when `gtgApplies`.
+- A separate "Gone to Ground · ×N stealth if concealed by terrain" hint row when `isGtg`, regardless of standing-position concealment.
 
 ### 7.6 Dug-in clear (§2.1)
 
@@ -156,22 +178,27 @@ moveUnit(unitId, newPosition) {
   this.requirePhase("Move");
   const unit = this.requireOwnUnit(unitId);
   const priorDugIn = unit instanceof Infantry ? unit.dugIn : undefined;
-  this.state.moveHistory.push({ unitId, priorPosition: unit.getPosition(), priorDugIn });
-  this.state.movedThisTurn.add(unitId);  // also for GtG §2.3
+  this.state.moveHistory.push({
+    unitId,
+    priorPosition: unit.getPosition(),
+    priorGoneToGround: unit.goneToGround,
+    ...(priorDugIn !== undefined && { priorDugIn }),
+  });
   unit.setPosition(newPosition);
   if (unit instanceof Infantry && unit.dugIn) unit.setDugIn(false);
+  unit.goneToGround = false;
+  this.state.movedThisTurn.add(unitId);
 }
 ```
 
-`undoLastMove` and `revertUnitMoves` restore `priorDugIn` when present.
+`undoLastMove` and `revertUnitMoves` restore both `priorDugIn` (when present) and `priorGoneToGround`.
 
 ### 7.7 Token markers (§2.4)
 
-Extend `UnitToken` with two optional badges drawn next to the milsymbol (small Konva `Group` overlays, listening disabled so they don't intercept clicks). Pass the two flags in as props from the views — already-existing call sites in `DeploymentView` / `AddRemoveUnitsView` / `MoveView` / `FireDeclareView` thread the GtG-eligibility predicate through. The marker is hidden for revealed enemy units to avoid posture-leak.
+`UnitToken` accepts optional `dugIn?: boolean` and `goneToGround?: boolean` props and draws small "D" / "G" badges next to the position dot when set (Konva `Group` overlays, `listening={false}` so they pass clicks through). MapCanvas accepts `dugInUnitIds` and `goneToGroundUnitIds` as `ReadonlySet<UnitId>` props and forwards the membership test to each `UnitToken`. A `computeUnitStatusBadges(game)` helper in `src/ui/canvas/` builds both sets from `game.state.units` (no team filter — own and revealed enemies render badges; hidden enemies aren't passed to MapCanvas at all so they don't render incidentally).
 
 ### 7.8 Tests
 
-- `Game.test`: dug-in clears on move; undo restores; revertUnitMoves restores; movedThisTurn snapshot lifecycle includes `createUnit` adds.
-- `VisionCalculator.test` (new or extended): GtG modifier stacks multiplicatively with single-highest pool; doesn't apply if moved or fired last turn; doesn't apply if not in concealing polygon; mid-game-added units don't qualify on the following turn; deployed units do qualify on turn 1.
+- `Game.test`: dug-in clears on move; undo restores both dug-in and GtG; revertUnitMoves restores both; Tank move-history entries don't carry priorDugIn but DO carry priorGoneToGround; repositionDeployedUnit preserves both.
+- `VisionCalculator.test`: GtG stacks on top of the single-highest concealment when the target is GtG AND concealed; doesn't stack when target is in the open; dug-in inherent concealment counts as concealment (so a dug-in GtG infantry on open ground does get the stack).
 - `terrainCatalog.test`: TallWoods + ShortTerrain edge-grace boundary cases (just below / above 2″).
-- Dug-in-preserved-on-Deploy-reposition: a small Game-level test that calls `repositionDeployedUnit` on a dugIn=true Infantry and checks the flag survived.

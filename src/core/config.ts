@@ -29,7 +29,7 @@ export const polygonStealthModifier: Record<PolygonTerrainType, number> = {
 
 export const shortWallStealthModifier = 2;
 
-export const tallWoodsRayThroughLimit = 2;
+export const tallWoodsRayThroughLimit = 3;
 
 /**
  * For Tall Woods and Short Terrain only: the portion of a ray inside the
@@ -38,7 +38,7 @@ export const tallWoodsRayThroughLimit = 2;
  * at full vision while leaving the woods penalty in place for targets deeper
  * inside. See docs/features/vision-rules-tweaks.md §2.2.
  */
-export const terrainEdgeGraceDistance = 2;
+export const terrainEdgeGraceDistance = 3;
 
 /**
  * Stealth multiplier applied on top of any other source when a unit is in

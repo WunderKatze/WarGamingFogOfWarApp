@@ -1,18 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   dugInStealthModifier,
+  goneToGroundStealthModifier,
   modifierEffects,
   polygonStealthModifier,
+  terrainEdgeGraceDistance,
   unitTypeStats,
 } from "../../src/core/config.js";
 import { GameMap } from "../../src/core/map/GameMap.js";
 import { TerrainPolygon } from "../../src/core/map/TerrainPolygon.js";
 import { TerrainWall } from "../../src/core/map/TerrainWall.js";
+import { resetRules, setRules } from "../../src/core/rules.js";
 import { Infantry } from "../../src/core/units/Infantry.js";
 import { Tank } from "../../src/core/units/Tank.js";
 import type { Point, TeamId, UnitId } from "../../src/core/types.js";
 import { VisionCalculator } from "../../src/core/VisionCalculator.js";
 import { createEmptyVisionState, type VisionState } from "../../src/core/VisionState.js";
+
+afterEach(() => {
+  resetRules();
+});
 
 const p = (x: number, y: number): Point => ({ x, y });
 
@@ -125,12 +132,20 @@ describe("VisionCalculator.discover", () => {
   });
 
   it("terrain stealth applies when the ray passes through concealing polygons", () => {
-    // Thin strip of tall woods between observer and target (3" wide < 4" block threshold)
-    const thinWoods = square("w", 4, 0, 3, 100, "TallWoods");
+    // Tests the rule "polygon stealth applies along a ray when the
+    // inside-portion exceeds edge grace." Default config has
+    // tallWoodsRayThroughLimit === terrainEdgeGraceDistance, which makes
+    // "ray contributes stealth without being blocked" mathematically
+    // impossible. Widen the LOS limit for this test so the scenario can
+    // exist; resetRules() in afterEach restores defaults.
+    const stripWidth = terrainEdgeGraceDistance + 1;
+    setRules({ tallWoodsRayThroughLimit: stripWidth + 10 });
+
+    const thinWoods = square("w", 4, 0, stripWidth, 100, "TallWoods");
     const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100, polygons: [thinWoods] }));
     const observer = tankAt("o", p(0, 50));
     const baseRange = unitTypeStats.Tank.baseVision;
-    // Effective stealth = tank base (1) × tallWoods modifier (3) → range / 3
+    // Effective stealth = tank base (1) × tallWoods modifier → range / mult
     const reducedRange = baseRange / polygonStealthModifier.TallWoods;
     const target = tankAt("t", p(reducedRange, 50));
     expect(vc.discover(observer, target)).toBe(true);
@@ -208,11 +223,14 @@ describe("VisionCalculator.runVisionPhase — first turn (empty state)", () => {
 
   it("asymmetric vision: a recon tank detects a regular tank but is not detected back", () => {
     const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
-    // Recon tank's vision range = 64; recon tank's intrinsic stealth = 4/3, so
-    // a regular tank's range against it = 48 / (4/3) = 36. Place them at distance 50:
-    // recon detects (50 ≤ 64), regular tank cannot (50 > 36).
+    // Recon's only asymmetry against a regular Tank is the vision multiplier
+    // (stealth multiplier = 1). Pick a distance strictly between the regular
+    // tank's vision range and the recon tank's extended range.
+    const tankRange = unitTypeStats.Tank.baseVision;
+    const reconRange = tankRange * modifierEffects.Recon.visionMultiplier;
+    const distance = (tankRange + reconRange) / 2;
     const a = reconTankAt("A1", p(0, 0), "A");
-    const b = tankAt("B1", p(50, 0), "B");
+    const b = tankAt("B1", p(distance, 0), "B");
     const state = createEmptyVisionState();
 
     vc.runVisionPhase(state, [a, b], new Set());
@@ -316,17 +334,19 @@ describe("VisionCalculator.runVisionPhase — step 7 fire actions", () => {
 
 describe("VisionCalculator.runVisionPhase — step 9 cascade (fire → See addition → mutual reveal)", () => {
   it("a fired recon tank becomes Revealed, which lets the enemy add it via See, triggering mutual reveal of the enemy too", () => {
-    const vc = new VisionCalculator(new GameMap({ width: 1000, height: 1000 }));
-    // Setup: recon A1 can Discover B1 (one-way detection). Distance 50:
-    //   A1 → B1: 50 ≤ 64 ✓
-    //   B1 → A1: 50 ≤ 36 ✗
-    // Then A1 fires. Expected cascade:
+    const vc = new VisionCalculator(new GameMap({ width: 5000, height: 1000 }));
+    // Setup: recon A1 can Discover B1 (one-way detection). Pick a distance
+    // strictly between the regular Tank's vision range and Recon's extended
+    // range — A1 sees B1, but B1 does NOT see A1. Then A1 fires; cascade:
     //   1. fire reveals A1
     //   2. team B's team list expands with A1
-    //   3. step 5 sees that A1 is on B1's team list → uses See instead of Discover → adds A1
+    //   3. step 5 sees A1 on B1's team list → uses See instead of Discover → adds A1
     //   4. step 8 sees mutual (A1↔B1 in each other's individual lists) → both revealed
+    const tankRange = unitTypeStats.Tank.baseVision;
+    const reconRange = tankRange * modifierEffects.Recon.visionMultiplier;
+    const distance = (tankRange + reconRange) / 2;
     const a = reconTankAt("A1", p(0, 0), "A");
-    const b = tankAt("B1", p(50, 0), "B");
+    const b = tankAt("B1", p(distance, 0), "B");
     const state = createEmptyVisionState();
 
     vc.runVisionPhase(state, [a, b], new Set(["A1"]));
@@ -357,31 +377,36 @@ describe("VisionCalculator.runVisionPhase — carry-over", () => {
 });
 
 describe("VisionCalculator — Gone to Ground", () => {
-  // A 30"-wide Short Terrain strip from x=10 to x=40. Short Terrain never
-  // blocks sight (so we rely on discover, not see) and its stealth
-  // multiplier is 2. Tank intrinsic stealth = 1, vision = 48.
-  // Observer at (0, 50), target at (18, 50): ray crosses 8" of short
-  // terrain (well past the 2" grace), target inside the polygon.
-  //   Without GtG: range = 48 / 2     = 24" → 18" detected.
-  //   With    GtG: range = 48 / (2*2) = 12" → 18" NOT detected.
-  const coverMap = () => {
-    const strip = square("st", 10, 0, 30, 100, "ShortTerrain");
-    return new GameMap({ width: 1000, height: 100, polygons: [strip] });
-  };
+  // Pick a target position strictly between the GtG range and the no-GtG
+  // range against a tank observer in a Short Terrain strip — guarantees
+  // "detected without GtG, not detected with GtG" regardless of config
+  // tweaks. Short Terrain never blocks sight, so we rely on discover.
+  const tankRange = unitTypeStats.Tank.baseVision;
+  const stStealth = polygonStealthModifier.ShortTerrain;
+  const noGtgRange = tankRange / stStealth;
+  const gtgRange = tankRange / (stStealth * goneToGroundStealthModifier);
+  const targetX = (noGtgRange + gtgRange) / 2;
+  // Strip needs to contain the target AND give the ray > edge-grace inside.
+  const stripStartX = 5;
+  const stripWidth = Math.max(targetX, noGtgRange) + 5;
+
+  const coverMap = () =>
+    new GameMap({
+      width: 1000,
+      height: 100,
+      polygons: [square("st", stripStartX, 0, stripWidth, 100, "ShortTerrain")],
+    });
 
   it("stacks GtG on top of the single-highest terrain mod when target is concealed", () => {
     const vc = new VisionCalculator(coverMap());
     const observer = tankAt("A1", p(0, 50), "A");
-    const target = tankAt("B1", p(18, 50), "B");
+    const target = tankAt("B1", p(targetX, 50), "B");
 
-    // Baseline: target NOT gone to ground → no GtG → A discovers B at 18".
     target.goneToGround = false;
     const baseState = createEmptyVisionState();
     vc.runVisionPhase(baseState, [observer, target], new Set());
     expectIndividual(baseState, "A1", ["B1"]);
 
-    // With B gone to ground → GtG stacks (target is concealed by the strip)
-    // → stealth doubles to ×4 → A does NOT discover B at 18".
     target.goneToGround = true;
     const gtgState = createEmptyVisionState();
     vc.runVisionPhase(gtgState, [observer, target], new Set());
@@ -389,11 +414,11 @@ describe("VisionCalculator — Gone to Ground", () => {
   });
 
   it("does NOT apply GtG when the target is in the open (no concealment for this ray)", () => {
-    // No cover map; target in the open. Even with goneToGround=true, no
-    // per-ray concealment exists, so GtG must not stack.
+    // Open map; even with goneToGround=true, no per-ray concealment exists
+    // so GtG must not stack. Pick a distance well inside vision range.
     const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
     const observer = tankAt("A1", p(0, 50), "A");
-    const target = tankAt("B1", p(40, 50), "B");
+    const target = tankAt("B1", p(unitTypeStats.Tank.baseVision / 2, 50), "B");
     target.goneToGround = true;
 
     const state = createEmptyVisionState();
@@ -402,14 +427,17 @@ describe("VisionCalculator — Gone to Ground", () => {
   });
 
   it("dug-in inherent concealment counts as cover for GtG stacking", () => {
-    // Open map, target is dug-in Infantry. Inherent concealment >1, so the
-    // discover ray is "concealed" → GtG should stack.
-    // Infantry vision = 48, intrinsic stealth = 4/3, dug-in = 2.
-    // Without GtG: range = 48 / (4/3 × 2)  = 18"   → 16" detected.
-    // With    GtG: range = 48 / (4/3 × 4)  = 9"    → 16" NOT detected.
+    // Open map, dug-in Infantry target observed by a Tank. Inherent
+    // concealment > 1, so the discover ray is "concealed" → GtG should
+    // stack. Pick a distance strictly between the GtG and no-GtG ranges.
+    const tankVision = unitTypeStats.Tank.baseVision;
+    const infStealth = unitTypeStats.Infantry.baseStealth;
+    const baseNoGtg = tankVision / (infStealth * dugInStealthModifier);
+    const baseGtg = tankVision / (infStealth * dugInStealthModifier * goneToGroundStealthModifier);
+    const targetX = (baseNoGtg + baseGtg) / 2;
     const vc = new VisionCalculator(new GameMap({ width: 1000, height: 100 }));
     const observer = tankAt("A1", p(0, 50), "A");
-    const target = infantryAt("B1", p(16, 50), /* dugIn */ true, "B");
+    const target = infantryAt("B1", p(targetX, 50), /* dugIn */ true, "B");
 
     target.goneToGround = false;
     const baseState = createEmptyVisionState();

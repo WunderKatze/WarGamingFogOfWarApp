@@ -6,8 +6,8 @@ export interface UnitTypeStats {
 }
 
 export const unitTypeStats: Record<UnitType, UnitTypeStats> = {
-  Infantry: { baseVision: 48, baseStealth: 4 / 3 },
-  Tank: { baseVision: 48, baseStealth: 1 },
+  Infantry: { baseVision: 72, baseStealth: 4 / 3 },
+  Tank: { baseVision: 64, baseStealth: 1 },
 };
 
 export interface ModifierEffects {
@@ -16,7 +16,7 @@ export interface ModifierEffects {
 }
 
 export const modifierEffects: Record<Modifier, ModifierEffects> = {
-  Recon: { visionMultiplier: 4 / 3, stealthMultiplier: 4 / 3 },
+  Recon: { visionMultiplier: 4 / 3, stealthMultiplier: 1 },
 };
 
 export const dugInStealthModifier = 2;
@@ -29,7 +29,7 @@ export const polygonStealthModifier: Record<PolygonTerrainType, number> = {
 
 export const shortWallStealthModifier = 2;
 
-export const tallWoodsRayThroughLimit = 4;
+export const tallWoodsRayThroughLimit = 2;
 
 /**
  * For Tall Woods and Short Terrain only: the portion of a ray inside the

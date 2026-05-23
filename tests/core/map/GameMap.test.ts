@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   polygonStealthModifier,
   shortWallStealthModifier,
+  tallWoodsRayThroughLimit,
 } from "../../../src/core/config.js";
 import { GameMap } from "../../../src/core/map/GameMap.js";
 import { TerrainPolygon } from "../../../src/core/map/TerrainPolygon.js";
@@ -77,16 +78,17 @@ describe("GameMap.isRayBlocked", () => {
   });
 
   it("Tall woods blocks a ray that travels more than the configured limit through it", () => {
-    // 20" wide woods; ray going through > 4" inside is blocked
-    const woods = square("w", 40, 0, 20, 100, "TallWoods");
+    // Strip wider than the limit; ray going fully across is blocked.
+    const width = tallWoodsRayThroughLimit + 1;
+    const woods = square("w", 40, 0, width, 100, "TallWoods");
     const map = new GameMap({ width: 100, height: 100, polygons: [woods] });
-    // 20" through the woods: blocked
     expect(map.isRayBlocked(p(10, 50), p(90, 50))).toBe(true);
   });
 
-  it("Tall woods does NOT block a ray that grazes <= 4 inches through it", () => {
-    // narrow strip of woods 3" wide
-    const woods = square("w", 40, 0, 3, 100, "TallWoods");
+  it("Tall woods does NOT block a ray whose inside-portion is within the configured limit", () => {
+    // Strip narrower than the limit; ray going fully across is NOT blocked.
+    const width = Math.max(0.5, tallWoodsRayThroughLimit - 0.5);
+    const woods = square("w", 40, 0, width, 100, "TallWoods");
     const map = new GameMap({ width: 100, height: 100, polygons: [woods] });
     expect(map.isRayBlocked(p(10, 50), p(90, 50))).toBe(false);
   });

@@ -539,6 +539,65 @@ describe("Game — FireDeclare phase and end of turn", () => {
   });
 });
 
+describe("Game — Recon Gone to Ground persistence (vision-recon-tweaks §2.2)", () => {
+  function setupAtMove(): Game {
+    const g = makeGame();
+    g.deployUnit({ type: "Tank", name: "A1", position: p(0, 0), modifiers: ["Recon"] });
+    g.deployUnit({ type: "Tank", name: "A2", position: p(10, 0) });
+    g.endDeployment();
+    g.startTurn();
+    g.deployUnit({ type: "Tank", name: "B1", position: p(200, 200) });
+    g.endDeployment();
+    g.chooseFirstPlayer("A");
+    g.startTurn();          // → AddRemoveUnits, all A units start GtG=true
+    g.endAddRemoveUnits();  // → Move
+    return g;
+  }
+
+  it("moveUnit keeps Recon Gone to Ground; non-Recon clears it", () => {
+    const g = setupAtMove();
+    const recon = g.state.getUnitById("u1")!;
+    const plain = g.state.getUnitById("u2")!;
+    expect(recon.goneToGround).toBe(true);
+    expect(plain.goneToGround).toBe(true);
+    g.moveUnit(recon.id, p(5, 0));
+    g.moveUnit(plain.id, p(15, 0));
+    expect(recon.goneToGround).toBe(true);
+    expect(plain.goneToGround).toBe(false);
+  });
+
+  it("createUnit for a Recon unit starts gone-to-ground", () => {
+    const g = setupAtMove();
+    const reconAdd = g.createUnit({
+      type: "Infantry", name: "Scouts", position: p(3, 3), modifiers: ["Recon"],
+    });
+    const plainAdd = g.createUnit({ type: "Infantry", name: "Reserves", position: p(4, 4) });
+    expect(reconAdd.goneToGround).toBe(true);
+    expect(plainAdd.goneToGround).toBe(false);
+  });
+
+  it("toggleFire un-declare on a Recon that moved restores Gone to Ground", () => {
+    const g = setupAtMove();
+    const recon = g.state.getUnitById("u1")!;
+    g.moveUnit(recon.id, p(5, 0));        // Recon keeps gtg=true here
+    g.endMove();                           // → FireDeclare
+    g.toggleFire(recon.id);                // declare fire → gtg=false
+    expect(recon.goneToGround).toBe(false);
+    g.toggleFire(recon.id);                // un-declare → Recon restores to true
+    expect(recon.goneToGround).toBe(true);
+  });
+
+  it("toggleFire un-declare on a non-Recon that moved leaves Gone to Ground cleared", () => {
+    const g = setupAtMove();
+    const plain = g.state.getUnitById("u2")!;
+    g.moveUnit(plain.id, p(15, 0));        // gtg=false
+    g.endMove();
+    g.toggleFire(plain.id);                // declare → gtg=false
+    g.toggleFire(plain.id);                // un-declare → still false (moved)
+    expect(plain.goneToGround).toBe(false);
+  });
+});
+
 describe("Game — end-to-end happy path", () => {
   it("plays one full round and returns control to the first player", () => {
     const g = makeGame();

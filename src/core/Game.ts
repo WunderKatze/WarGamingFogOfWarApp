@@ -152,7 +152,16 @@ export class Game {
     // Mid-game additions start "in flux" — not gone to ground until the
     // owner's next own turn (where startTurn resets the flag and a static
     // remainder of that turn leaves it true). See vision-rules-tweaks §2.3.
-    const unit = this.buildUnit(params, /* defaultDugIn */ false, /* defaultGoneToGround */ false);
+    // Exception: Recon units arrive scouting, so they start GtG=true —
+    // parallel to "movement doesn't break Recon GtG." See
+    // vision-recon-tweaks §2.2.
+    const modifiers = params.modifiers === undefined ? undefined : [...params.modifiers];
+    const isRecon = modifiers?.includes("Recon") ?? false;
+    const unit = this.buildUnit(
+      { ...params, ...(modifiers !== undefined && { modifiers }) },
+      /* defaultDugIn */ false,
+      /* defaultGoneToGround */ isRecon,
+    );
     this.state.units.push(unit);
     this.state.movedThisTurn.add(unit.id);
     return unit;
@@ -174,7 +183,9 @@ export class Game {
     });
     unit.setPosition(newPosition);
     if (unit instanceof Infantry && unit.dugIn) unit.setDugIn(false);
-    unit.goneToGround = false;
+    // Recon keeps GtG when moving — movement is part of the scout identity.
+    // See docs/features/vision-recon-tweaks.md §2.2.
+    if (!unit.hasModifier("Recon")) unit.goneToGround = false;
     this.state.movedThisTurn.add(unitId);
   }
 
@@ -305,9 +316,12 @@ export class Game {
     const unit = this.requireOwnUnit(unitId);
     if (this.state.firedThisTurn.has(unitId)) {
       // Un-declaring fire: restore Gone to Ground only if the unit also
-      // didn't move this turn. If they moved, gtg stays false regardless.
+      // didn't move this turn. Recon ignores `movedThisTurn` here because
+      // movement doesn't break their GtG. See vision-recon-tweaks §2.2.
       this.state.firedThisTurn.delete(unitId);
-      unit.goneToGround = !this.state.movedThisTurn.has(unitId);
+      unit.goneToGround = unit.hasModifier("Recon")
+        ? true
+        : !this.state.movedThisTurn.has(unitId);
     } else {
       this.state.firedThisTurn.add(unitId);
       unit.goneToGround = false;

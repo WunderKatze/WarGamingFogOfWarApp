@@ -63,6 +63,26 @@ interface BaseWallEntry {
 export type PolygonTerrainEntry = BasePolygonEntry & { kind: PolygonTerrainType };
 export type WallTerrainEntry = BaseWallEntry & { kind: WallType };
 
+/**
+ * Asymmetric edge-grace check for Tall Woods / Short Terrain. The grace
+ * rewards an observer hugging the inside of the polygon trying to see OUT,
+ * not an observer outside trying to see in or through. So:
+ *   - observer outside the polygon → any non-zero inside-portion contributes
+ *     concealment (a target inside the polygon is always concealed from
+ *     outside; a sliver-through always contributes too).
+ *   - observer inside the polygon → grace applies to the inside-portion;
+ *     ≤ grace = no concealment (observer can see out / across cleanly).
+ * See docs/features/vision-rules-tweaks.md §2.2 "Asymmetric by design".
+ */
+function graceAsymmetricApplies(poly: TerrainPolygon, from: Point, to: Point): boolean {
+  const insideLength = segmentLengthInsidePolygon(from, to, poly.vertices);
+  if (insideLength === 0) return false;
+  if (poly.containsPoint(from)) {
+    return insideLength > getRules().terrainEdgeGraceDistance;
+  }
+  return true;
+}
+
 export const polygonTerrainCatalog: Record<PolygonTerrainType, PolygonTerrainEntry> = {
   Building: {
     kind: "Building",
@@ -85,12 +105,10 @@ export const polygonTerrainCatalog: Record<PolygonTerrainType, PolygonTerrainEnt
     get stealthMultiplier() { return getRules().polygonStealthModifier.TallWoods; },
     get ruleDescription() {
       const rules = getRules();
-      return `Multiplies stealth ×${rules.polygonStealthModifier.TallWoods} when LOS passes through more than ${rules.terrainEdgeGraceDistance}″ inside; blocks LOS past ${rules.tallWoodsRayThroughLimit}″ inside.`;
+      return `Multiplies stealth ×${rules.polygonStealthModifier.TallWoods} for rays into / through the woods. Observer inside hugging the edge (≤${rules.terrainEdgeGraceDistance}″ deep) can see out at full vision. Blocks LOS past ${rules.tallWoodsRayThroughLimit}″ inside.`;
     },
     visual: { fill: "#2d5e2d", stroke: "#333", opacity: 0.7 },
-    appliesAsConcealment(poly, from, to) {
-      return segmentLengthInsidePolygon(from, to, poly.vertices) > getRules().terrainEdgeGraceDistance;
-    },
+    appliesAsConcealment: graceAsymmetricApplies,
     blocksRay(poly, from, to) {
       return segmentLengthInsidePolygon(from, to, poly.vertices) > getRules().tallWoodsRayThroughLimit;
     },
@@ -101,12 +119,10 @@ export const polygonTerrainCatalog: Record<PolygonTerrainType, PolygonTerrainEnt
     get stealthMultiplier() { return getRules().polygonStealthModifier.ShortTerrain; },
     get ruleDescription() {
       const rules = getRules();
-      return `Multiplies stealth ×${rules.polygonStealthModifier.ShortTerrain} when LOS passes through more than ${rules.terrainEdgeGraceDistance}″ inside.`;
+      return `Multiplies stealth ×${rules.polygonStealthModifier.ShortTerrain} for rays into / through it. Observer inside hugging the edge (≤${rules.terrainEdgeGraceDistance}″ deep) can see out at full vision.`;
     },
     visual: { fill: "#a8c870", stroke: "#333", opacity: 0.7 },
-    appliesAsConcealment(poly, from, to) {
-      return segmentLengthInsidePolygon(from, to, poly.vertices) > getRules().terrainEdgeGraceDistance;
-    },
+    appliesAsConcealment: graceAsymmetricApplies,
     blocksRay() {
       return false;
     },

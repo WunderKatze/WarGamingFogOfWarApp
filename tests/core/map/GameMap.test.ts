@@ -154,22 +154,6 @@ describe("GameMap.getConcealmentModifiersAlongRay", () => {
     expect(mods).toContain(shortWallStealthModifier);
   });
 
-  it("Tall Woods grants no stealth when the ray's inside-portion is within the edge grace", () => {
-    // A 1.5"-wide strip; a ray going fully across has only 1.5" inside,
-    // which is below the default 2" grace.
-    const sliver = square("w", 40, 0, 1.5, 100, "TallWoods");
-    const map = new GameMap({ width: 100, height: 100, polygons: [sliver] });
-    expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(90, 50))).toEqual([]);
-  });
-
-  it("Short Terrain grants stealth when the ray's inside-portion exceeds the edge grace", () => {
-    // 5"-wide strip; ray inside-portion is 5", clearly > 2".
-    const strip = square("st", 40, 0, 5, 100, "ShortTerrain");
-    const map = new GameMap({ width: 100, height: 100, polygons: [strip] });
-    expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(90, 50)))
-      .toEqual([polygonStealthModifier.ShortTerrain]);
-  });
-
   it("Building still contributes stealth without an edge grace (target-inside rule)", () => {
     // Even a narrow building counts when the target is inside — the
     // grace is woods/short-only, not buildings.
@@ -177,5 +161,73 @@ describe("GameMap.getConcealmentModifiersAlongRay", () => {
     const map = new GameMap({ width: 100, height: 100, polygons: [tiny] });
     expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(40.5, 50)))
       .toEqual([polygonStealthModifier.Building]);
+  });
+});
+
+// Edge grace is asymmetric (vision-rules-tweaks §2.2): it rewards an
+// observer hugging the inside of a TallWoods / ShortTerrain polygon
+// who is trying to see OUT. It must NOT help an observer who is
+// outside the polygon trying to see in or through it.
+describe("GameMap.getConcealmentModifiersAlongRay — edge-grace asymmetry", () => {
+  it("observer outside + target outside (ray slivers through Tall Woods) → polygon contributes", () => {
+    // 1.5"-thick strip — narrower than the default 2" grace, so under a
+    // symmetric rule this ray would NOT contribute concealment.
+    const sliver = square("w", 40, 0, 1.5, 100, "TallWoods");
+    const map = new GameMap({ width: 100, height: 100, polygons: [sliver] });
+    expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(90, 50)))
+      .toEqual([polygonStealthModifier.TallWoods]);
+  });
+
+  it("observer outside + target inside Short Terrain (target just barely inside) → polygon contributes", () => {
+    // A wider strip so we can place target just inside. Strip at x=40..50.
+    const strip = square("st", 40, 0, 10, 100, "ShortTerrain");
+    const map = new GameMap({ width: 100, height: 100, polygons: [strip] });
+    // Target at x=41 — only 1" inside, well under the 2" grace.
+    expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(41, 50)))
+      .toEqual([polygonStealthModifier.ShortTerrain]);
+  });
+
+  it("observer inside Tall Woods hugging the EXIT edge + target outside → grace applies, polygon does NOT contribute", () => {
+    // Strip at x=40..80. Observer at x=79 (1" from the exit edge in the
+    // ray's direction); target at x=150 (outside). Inside-portion = 1″ < 2″ grace.
+    const woods = square("w", 40, 0, 40, 100, "TallWoods");
+    const map = new GameMap({ width: 200, height: 100, polygons: [woods] });
+    expect(map.getConcealmentModifiersAlongRay(p(79, 50), p(150, 50))).toEqual([]);
+  });
+
+  it("observer inside Tall Woods deeper than grace from the exit + target outside → polygon contributes", () => {
+    // Same strip, observer at x=50 — 30" of ray inside the woods on the way out.
+    const woods = square("w", 40, 0, 40, 100, "TallWoods");
+    const map = new GameMap({ width: 200, height: 100, polygons: [woods] });
+    expect(map.getConcealmentModifiersAlongRay(p(50, 50), p(150, 50)))
+      .toEqual([polygonStealthModifier.TallWoods]);
+  });
+
+  it("both inside the same Short Terrain, close together (within grace) → polygon does NOT contribute", () => {
+    const strip = square("st", 40, 0, 40, 100, "ShortTerrain");
+    const map = new GameMap({ width: 200, height: 100, polygons: [strip] });
+    // Both at x ∈ (40, 80), 1" apart — full ray inside, length 1" < 2" grace.
+    expect(map.getConcealmentModifiersAlongRay(p(50, 50), p(51, 50))).toEqual([]);
+  });
+
+  it("both inside the same Short Terrain, far apart (past grace) → polygon contributes", () => {
+    const strip = square("st", 40, 0, 40, 100, "ShortTerrain");
+    const map = new GameMap({ width: 200, height: 100, polygons: [strip] });
+    expect(map.getConcealmentModifiersAlongRay(p(45, 50), p(75, 50)))
+      .toEqual([polygonStealthModifier.ShortTerrain]);
+  });
+
+  it("observer outside + target inside (just barely) Tall Woods → polygon contributes", () => {
+    // Symmetric check to the Short Terrain target-inside test above.
+    const woods = square("w", 40, 0, 10, 100, "TallWoods");
+    const map = new GameMap({ width: 100, height: 100, polygons: [woods] });
+    expect(map.getConcealmentModifiersAlongRay(p(10, 50), p(41, 50)))
+      .toEqual([polygonStealthModifier.TallWoods]);
+  });
+
+  it("observer inside Short Terrain hugging the EXIT edge + target outside → grace applies, polygon does NOT contribute", () => {
+    const strip = square("st", 40, 0, 40, 100, "ShortTerrain");
+    const map = new GameMap({ width: 200, height: 100, polygons: [strip] });
+    expect(map.getConcealmentModifiersAlongRay(p(79, 50), p(150, 50))).toEqual([]);
   });
 });

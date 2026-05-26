@@ -12,7 +12,7 @@ export interface UnitInit {
    * Initial Gone to Ground state. `true` for units placed during Deployment
    * (settled), `false` for units added mid-game via Game.createUnit (in
    * flux). Game owns the lifecycle thereafter — see
-   * docs/features/vision-rules-tweaks.md §2.3.
+   * docs/features/v1/vision-rules-tweaks.md §2.3.
    */
   goneToGround?: boolean;
 }
@@ -30,7 +30,7 @@ export abstract class Unit {
    * owner's most recent turn. Game mutates this directly via moveUnit,
    * toggleFire, startTurn (reset), and the undo paths. VisionCalculator
    * reads it to apply the GtG stealth stack when the per-ray discovery is
-   * already concealed. See docs/features/vision-rules-tweaks.md §2.3.
+   * already concealed. See docs/features/v1/vision-rules-tweaks.md §2.3.
    */
   goneToGround: boolean;
 

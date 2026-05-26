@@ -34,7 +34,7 @@ export class VisionCalculator {
    *   - the target is concealed for this ray (per the rule above).
    * A GtG unit in the open with no inherent concealment gets no GtG stack;
    * the same unit viewed across a short wall or through short terrain does.
-   * See docs/features/vision-rules-tweaks.md §2.3.
+   * See docs/features/v1/vision-rules-tweaks.md §2.3.
    */
   discover(observer: Unit, target: Unit): boolean {
     if (!this.see(observer, target)) return false;

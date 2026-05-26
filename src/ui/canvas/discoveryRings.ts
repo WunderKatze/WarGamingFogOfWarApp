@@ -7,7 +7,7 @@ import { getStealthAtPosition } from "./effectiveStealth.js";
 
 /**
  * Pure ring-computation module for the Discovery Visualizer
- * (see docs/features/discovery-visualizer.md).
+ * (see docs/features/v1/discovery-visualizer.md).
  *
  * The renderer takes the player's settings (archetype + posture + GtG),
  * resolves them via `resolveLens`, then per visible own unit calls

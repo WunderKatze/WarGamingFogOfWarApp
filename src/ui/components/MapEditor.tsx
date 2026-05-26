@@ -26,7 +26,7 @@ import { theme } from "../theme.js";
  * working draft. Tool behavior (drawing polygons, walls, deletion),
  * snap rendering, file I/O, and Apply land in subsequent commits.
  *
- * See `docs/features/map-editor.md`.
+ * See `docs/features/v1/map-editor.md`.
  */
 export function MapEditor() {
   const { game, resetWith } = useGameContext();

@@ -127,7 +127,7 @@ function Header() {
 /**
  * Renders the main view area. The map editor takes priority over the
  * phase view when it's open — see `useMapEditorContext` and
- * `docs/features/map-editor.md` §7.1.
+ * `docs/features/v1/map-editor.md` §7.1.
  */
 function ViewRouter() {
   const { game } = useGameContext();

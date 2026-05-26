@@ -15,7 +15,7 @@ import { RulesEditor } from "./RulesEditor.js";
  * Hidden on the Transition screen, paralleling the info menu rule.
  * Closes on outside click, Escape, or selecting a top-level action.
  *
- * See `docs/features/game-menu.md`.
+ * See `docs/features/v1/game-menu.md`.
  */
 export function GameMenu() {
   const { game, reset } = useGameContext();

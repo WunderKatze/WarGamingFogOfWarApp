@@ -12,7 +12,7 @@ import { TerrainWall, type TerrainWallInit } from "./TerrainWall.js";
  * Polygons and walls are stored using the existing `*Init` types so the
  * field names match what the constructors accept.
  *
- * See `docs/features/map-editor.md` §7.2.
+ * See `docs/features/v1/map-editor.md` §7.2.
  */
 export interface WorkingMap {
   width: number;

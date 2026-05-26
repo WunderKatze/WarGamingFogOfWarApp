@@ -29,7 +29,7 @@ const SYMBOL_SIZE = 26;
  *   3. A hint string when the cursor is over the map with no unit under it.
  *   4. An out-of-map idle string when the cursor is off the canvas entirely.
  *
- * See docs/features/info-menu.md.
+ * See docs/features/v1/info-menu.md.
  */
 export function InfoMenu() {
   const { game, dispatch } = useGameContext();

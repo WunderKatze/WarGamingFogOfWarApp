@@ -72,7 +72,7 @@ export type WallTerrainEntry = BaseWallEntry & { kind: WallType };
  *     outside; a sliver-through always contributes too).
  *   - observer inside the polygon → grace applies to the inside-portion;
  *     ≤ grace = no concealment (observer can see out / across cleanly).
- * See docs/features/vision-rules-tweaks.md §2.2 "Asymmetric by design".
+ * See docs/features/v1/vision-rules-tweaks.md §2.2 "Asymmetric by design".
  */
 function graceAsymmetricApplies(poly: TerrainPolygon, from: Point, to: Point): boolean {
   const insideLength = segmentLengthInsidePolygon(from, to, poly.vertices);

@@ -8,7 +8,7 @@
 > **Status note.** Retagged from v1 to v2 as part of the V1 timeline push-up:
 > V1 now ships the smaller polish items needed for tabletop playability,
 > with this richer terrain-collection model as the V2 successor to
-> `map-editor.md` stage-1 (draw-direct). Stage 1 is the v1 mapping
+> `../v1/map-editor.md` stage-1 (draw-direct). Stage 1 is the v1 mapping
 > solution; the Collection model below replaces it in v2. Pick this back
 > up after V1 ships.
 
@@ -18,7 +18,7 @@
 
 Real tabletop wargaming uses **physical terrain pieces**: a player has a small collection of buildings, woods, walls, hills, and roads — each a specific physical object with fixed dimensions — and arranges them on the table to set up the battlefield. The same building piece can appear on many different tables across many games; the player owns N of each piece and physically picks one up and places it.
 
-The current draw-direct map editor (see `map-editor.md` stage 1) treats every terrain feature as a one-off polygon or wall drawn in-place. That works as a quick-ship but doesn't mirror how the player actually builds tables in real life, and doesn't let them reuse the same building piece across multiple maps.
+The current draw-direct map editor (see `../v1/map-editor.md` stage 1) treats every terrain feature as a one-off polygon or wall drawn in-place. That works as a quick-ship but doesn't mirror how the player actually builds tables in real life, and doesn't let them reuse the same building piece across multiple maps.
 
 The Terrain Collection adds a layer of indirection: the player **designs reusable terrain pieces** once, then **places instances** of them on any map by dragging from a collection sidebar. Each piece carries a real-world identity (name, count owned, fixed dimensions) that the player can map back to their physical bag of terrain.
 
@@ -135,14 +135,14 @@ Cosmetic-type pieces materialize into `TerrainPolygon` with a new
 6. **Edge length labels.** Only while drawing in the creator, only on the currently-selected placed piece, or always visible on every placed piece in the editor? Always-visible could get noisy fast.
 7. **Collection scope.** One global collection per device (one bag of terrain, many maps) or one collection per map (saved together)? The user's spec leans global ("imported and exported separately") — confirm.
 8. **Map portability.** When the user shares a map JSON with another player, does the map reference pieces by id (requires the recipient to also have a matching collection) or embed a snapshot of the referenced pieces? Embedded is friendlier; ref-by-id is smaller. Could be both via a switch on save.
-9. **Migration from stage-1 maps.** Stage-1 of `map-editor.md` saves direct-drawn polygons and walls in a flat JSON. When this Collection model ships, do we have an importer that wraps each stage-1 polygon/wall as a single-count piece? Probably yes — cheap to write, preserves old saves.
+9. **Migration from stage-1 maps.** Stage-1 of `../v1/map-editor.md` saves direct-drawn polygons and walls in a flat JSON. When this Collection model ships, do we have an importer that wraps each stage-1 polygon/wall as a single-count piece? Probably yes — cheap to write, preserves old saves.
 10. **What happens to a placed piece whose definition was deleted from the collection** — orphaned placements rendered with a warning, auto-removed, or refused-deletion-while-placed?
 
 ---
 
 ## 5. Relationship to other features
 
-- **Succeeds** the stage-1 draw-direct flow in `map-editor.md`. Once this
+- **Succeeds** the stage-1 draw-direct flow in `../v1/map-editor.md`. Once this
   ships, the draw-direct UI can be removed (or kept as an "advanced /
   bypass-collection" tool if useful).
 - **Adds** a Cosmetic polygon terrain type to the existing

@@ -4,7 +4,7 @@ import { theme } from "../theme.js";
 
 /**
  * Debug options sub-panel of the Game menu. Currently hosts a single
- * toggle: Show All Units. See `docs/features/game-menu.md` §2.4.
+ * toggle: Show All Units. See `docs/features/v1/game-menu.md` §2.4.
  *
  * Toggling on marks `GameState.debugUsedThisTurn = true` so the next
  * player's Transition screen surfaces a notice. Toggling off does NOT

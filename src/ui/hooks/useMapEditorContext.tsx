@@ -17,7 +17,7 @@ const MapEditorContext = createContext<MapEditorContextValue | null>(null);
  * editor showing right now?" so the router knows whether to render the
  * phase view or the editor.
  *
- * See `docs/features/map-editor.md` §7.1.
+ * See `docs/features/v1/map-editor.md` §7.1.
  */
 export function MapEditorProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);

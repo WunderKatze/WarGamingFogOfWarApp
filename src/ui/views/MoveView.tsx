@@ -54,7 +54,7 @@ export function MoveView() {
   const [shiftHeld, setShiftHeld] = useState(false);
   const [waypointToggle, setWaypointToggle] = useState(false);
 
-  // Pen for mid-Move unit creation (see docs/features/mid-game-roster.md
+  // Pen for mid-Move unit creation (see docs/features/v1/mid-game-roster.md
   // §2.1). Placement is explicit: clicking the pen's Place button primes
   // the next empty-map click for a createUnit call. We don't make every
   // empty click an add, because empty clicks already commit moves /

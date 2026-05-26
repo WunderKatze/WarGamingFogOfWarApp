@@ -36,7 +36,7 @@ interface Props {
  * Reads settings from the Visualizer context, computes rings via the pure
  * `discoveryRings` module, and renders one Group per shown unit.
  *
- * See docs/features/discovery-visualizer.md §2.5 / §8.4.
+ * See docs/features/v1/discovery-visualizer.md §2.5 / §8.4.
  */
 export function DiscoveryVisualizerOverlay({ perspectiveTeamId }: Props) {
   const { game } = useGameContext();

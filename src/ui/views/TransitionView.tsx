@@ -21,7 +21,7 @@ export function TransitionView() {
   const rulesChanged = game.state.rulesChangedThisTurn;
   // Render the post-deployment first-player-select variant when both
   // players have deployed but nobody has been picked to go first yet.
-  // Per docs/features/deployment-stop-gap.md §2.5, this is a separate
+  // Per docs/features/v1/deployment-stop-gap.md §2.5, this is a separate
   // screen so a misclick lands on the wrong team's Start-Turn prompt
   // rather than directly revealing their map.
   if (

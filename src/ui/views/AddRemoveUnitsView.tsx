@@ -13,7 +13,7 @@ import { useSelectionContext } from "../hooks/useSelectionContext.js";
 const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battalion"];
 
 /**
- * View for the Add/Remove Units phase — see docs/features/mid-game-roster.md §2.3.
+ * View for the Add/Remove Units phase — see docs/features/v1/mid-game-roster.md §2.3.
  *
  * Slim DeploymentView: pen for adding a unit, Selected panel with a
  * single Delete affordance for removing the selected own-unit, a

@@ -5,7 +5,7 @@ import type { ArchetypeChoice } from "../canvas/discoveryRings.js";
  * Provider for the Discovery Visualizer's session-only settings — the lens
  * the player has chosen + scope + the copy-from-hover toggle. State is
  * React-local; nothing persists across page loads (v1 scope).
- * See docs/features/discovery-visualizer.md §2 / §8.1–8.2.
+ * See docs/features/v1/discovery-visualizer.md §2 / §8.1–8.2.
  */
 
 export type DiscoveryScope = "off" | "selected" | "all";

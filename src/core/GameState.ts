@@ -15,7 +15,7 @@ export interface MoveHistoryEntry {
   /**
    * Pre-move dug-in flag for Infantry. Recorded alongside the position
    * so `undoLastMove` / `revertUnitMoves` can restore both — per
-   * docs/features/vision-rules-tweaks.md §2.1, moveUnit clears dug-in
+   * docs/features/v1/vision-rules-tweaks.md §2.1, moveUnit clears dug-in
    * on Infantry, and undoing a move must restore it. Absent for Tanks
    * (no dug-in concept) and for any future unit type that doesn't
    * support the flag.
@@ -37,7 +37,7 @@ export type GamePhase =
    * casualties) that runs once between each Transition and Move. The
    * pre-Move vision phase fires at the end of this phase, NOT at startTurn,
    * so adds/removes here participate in the same vision recompute.
-   * See docs/features/mid-game-roster.md §2.3.
+   * See docs/features/v1/mid-game-roster.md §2.3.
    */
   | "AddRemoveUnits"
   | "Move"
@@ -94,7 +94,7 @@ export class GameState {
   /**
    * Set true once the player who goes first has been chosen via
    * `chooseFirstPlayer` (the post-deployment "who-goes-first" Transition
-   * variant per docs/features/deployment-stop-gap.md §2.5). Stays true
+   * variant per docs/features/v1/deployment-stop-gap.md §2.5). Stays true
    * for the rest of the game. Until set, the post-deployment Transition
    * renders the selection buttons instead of Start Turn.
    */
@@ -103,7 +103,7 @@ export class GameState {
   /**
    * Per-Move-phase undo stack: each entry records a unit's position prior to
    * a committed move. Cleared on `endMove`. See feature
-   * docs/features/movement-preview-and-undo.md.
+   * docs/features/v1/movement-preview-and-undo.md.
    */
   moveHistory: MoveHistoryEntry[] = [];
 
@@ -111,7 +111,7 @@ export class GameState {
    * Set when any vision-rule value mutated during the active player's turn.
    * Drives the "Vision Rules changed this turn" notice on the next player's
    * Transition screen, then cleared by `startTurn`. See feature
-   * docs/features/game-menu.md.
+   * docs/features/v1/game-menu.md.
    */
   rulesChangedThisTurn = false;
 

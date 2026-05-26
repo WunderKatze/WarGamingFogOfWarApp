@@ -18,7 +18,7 @@ import { theme } from "../theme.js";
  * AddRemoveUnits). Hidden during Deploy (no enemy info yet), Transition
  * (full-takeover view), and while the map editor is open.
  *
- * Per docs/features/discovery-visualizer.md §2.1.
+ * Per docs/features/v1/discovery-visualizer.md §2.1.
  */
 export function DiscoveryVisualizerPanel() {
   const { game } = useGameContext();

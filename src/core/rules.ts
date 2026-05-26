@@ -25,7 +25,7 @@ import type { Modifier, PolygonTerrainType, UnitType } from "./types.js";
  * config consts now act exclusively as the defaults baseline that
  * `resetRules()` restores.
  *
- * See `docs/features/game-menu.md` §8.1 for the design context.
+ * See `docs/features/v1/game-menu.md` §8.1 for the design context.
  */
 
 export interface Rules {

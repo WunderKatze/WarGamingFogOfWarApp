@@ -8,7 +8,7 @@
 > **Scope note.** This is the deliberately-minimal first cut of map
 > editing — straight draw-direct polygons and walls, no reusable terrain
 > pieces, no rotation, no photo backdrop. The intended v1 design is the
-> Terrain Collection model in `terrain-collection.md`, which will
+> Terrain Collection model in `../v2/terrain-collection.md`, which will
 > eventually supersede this. Stage 1 ships first to unblock tabletop use
 > for an imminent game; some of stage 1 is acknowledged throwaway work
 > (the draw-direct UI itself; the save/load file format and edge-case
@@ -26,7 +26,7 @@ The requirements doc (§3.1) describes two workflows:
 - **Draw-first** — start on a blank rectangle, draw terrain in-app, then set up the physical table to match.
 - **Photo-first** — load a photograph of the table, calibrate scale, annotate terrain on top.
 
-**This doc covers the draw-first workflow only (stage 1).** Photo-first is captured as out-of-scope and gets its own feature doc when needed. The eventual reusable-pieces Terrain Collection model is captured separately in `terrain-collection.md` (parked in Draft).
+**This doc covers the draw-first workflow only (stage 1).** Photo-first is captured as out-of-scope and gets its own feature doc when needed. The eventual reusable-pieces Terrain Collection model is captured separately in `../v2/terrain-collection.md` (parked in Draft).
 
 ---
 
@@ -178,7 +178,7 @@ Three radio-selected tools share the canvas:
 ## 5. Out of scope (stage 1)
 
 - **Photo-first workflow** — backdrop image upload, drawing a reference segment for scale calibration, and rendering the photo as a background under the terrain layer. Separate feature doc when prioritized.
-- **Reusable Terrain Pieces / drag-from-collection placement** — see `terrain-collection.md`. The intended v1 model that supersedes draw-direct.
+- **Reusable Terrain Pieces / drag-from-collection placement** — see `../v2/terrain-collection.md`. The intended v1 model that supersedes draw-direct.
 - **Cosmetic terrain type** — a no-vision-rules polygon for roads / paths. Lands with the Terrain Collection.
 - **Move / rotate placed terrain** — moving or rotating an already-committed polygon/wall. Stage 1 supports delete + redraw only; rotation isn't even a concept yet.
 - **Primitive shapes** — rectangle / circle polygon tools. Freeform vertex-by-vertex is the only polygon entry method in stage 1.

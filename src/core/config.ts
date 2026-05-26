@@ -36,7 +36,7 @@ export const tallWoodsRayThroughLimit = 3;
  * polygon must EXCEED this many inches before the polygon contributes its
  * stealth multiplier. Lets a unit hugging the inside of a treeline see out
  * at full vision while leaving the woods penalty in place for targets deeper
- * inside. See docs/features/vision-rules-tweaks.md §2.2.
+ * inside. See docs/features/v1/vision-rules-tweaks.md §2.2.
  */
 export const terrainEdgeGraceDistance = 3;
 
@@ -44,6 +44,6 @@ export const terrainEdgeGraceDistance = 3;
  * Stealth multiplier applied on top of any other source when a unit is in
  * cover-providing terrain AND hasn't moved or fired during the previous
  * turn. Stacks multiplicatively with terrain / dug-in / etc. See
- * docs/features/vision-rules-tweaks.md §2.3.
+ * docs/features/v1/vision-rules-tweaks.md §2.3.
  */
 export const goneToGroundStealthModifier = 2;

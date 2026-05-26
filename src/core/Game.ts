@@ -73,7 +73,7 @@ export class Game {
    * screen. Phase stays Transition — the normal Start-Turn screen renders for
    * the chosen player on the next render, giving a misclick a soft landing
    * (the wrong team's Transition is just a Start-Turn prompt, no map shown).
-   * See docs/features/deployment-stop-gap.md §2.5.
+   * See docs/features/v1/deployment-stop-gap.md §2.5.
    */
   chooseFirstPlayer(teamId: TeamId): void {
     this.requirePhase("Transition");
@@ -98,7 +98,7 @@ export class Game {
    * phase depending on game state. The pre-Move vision phase does *not*
    * run here — it runs at `endAddRemoveUnits` so any roster cleanup the
    * player does first participates in the same vision recompute. See
-   * docs/features/mid-game-roster.md §2.3.
+   * docs/features/v1/mid-game-roster.md §2.3.
    */
   startTurn(): void {
     this.requirePhase("Transition");
@@ -114,7 +114,7 @@ export class Game {
     // Reset Gone to Ground for all of the active player's units — each
     // own-turn starts with the assumption units will be static; moves and
     // fires during the turn flip the flag back to false. See
-    // docs/features/vision-rules-tweaks.md §2.3.
+    // docs/features/v1/vision-rules-tweaks.md §2.3.
     const active = this.state.getActivePlayer();
     for (const unit of this.state.units) {
       if (unit.teamId === active) unit.goneToGround = true;
@@ -141,7 +141,7 @@ export class Game {
    * Mid-game unit creation (reserves entering the board, infantry
    * disembarking). Infantry defaults to `dugIn: false` per §3.2 unless
    * overridden. Allowed during Move (mid-turn arrivals) or AddRemoveUnits
-   * (pre-Move casualty cleanup), per docs/features/mid-game-roster.md.
+   * (pre-Move casualty cleanup), per docs/features/v1/mid-game-roster.md.
    */
   createUnit(params: CreateUnitParams): Unit {
     if (this.state.phase !== "Move" && this.state.phase !== "AddRemoveUnits") {
@@ -172,7 +172,7 @@ export class Game {
     const unit = this.requireOwnUnit(unitId);
     // Snapshot dug-in and goneToGround alongside position so
     // undoLastMove / revertUnitMoves can restore them — per
-    // docs/features/vision-rules-tweaks.md §2.1 / §2.3, moving clears
+    // docs/features/v1/vision-rules-tweaks.md §2.1 / §2.3, moving clears
     // both, and undoing a move should restore the unit's prior state.
     const priorDugIn = unit instanceof Infantry ? unit.dugIn : undefined;
     this.state.moveHistory.push({
@@ -184,7 +184,7 @@ export class Game {
     unit.setPosition(newPosition);
     if (unit instanceof Infantry && unit.dugIn) unit.setDugIn(false);
     // Recon keeps GtG when moving — movement is part of the scout identity.
-    // See docs/features/vision-recon-tweaks.md §2.2.
+    // See docs/features/v1/vision-recon-tweaks.md §2.2.
     if (!unit.hasModifier("Recon")) unit.goneToGround = false;
     this.state.movedThisTurn.add(unitId);
   }
@@ -240,9 +240,9 @@ export class Game {
 
   deleteUnit(unitId: UnitId): void {
     // Allowed in Move (mid-game losses), Deploy (fix a misclick during
-    // setup, per docs/features/deployment-stop-gap.md §2.2), and
+    // setup, per docs/features/v1/deployment-stop-gap.md §2.2), and
     // AddRemoveUnits (between-turn casualty cleanup, per
-    // docs/features/mid-game-roster.md §2.3).
+    // docs/features/v1/mid-game-roster.md §2.3).
     if (
       this.state.phase !== "Move" &&
       this.state.phase !== "Deploy" &&
@@ -269,7 +269,7 @@ export class Game {
    * Reposition an already-deployed unit during the Deploy phase. Unlike
    * `moveUnit` (Move phase, undo-tracked via moveHistory), Deploy has no
    * undo stack — repositioning is a direct write to the unit's position.
-   * See docs/features/deployment-stop-gap.md §2.1.
+   * See docs/features/v1/deployment-stop-gap.md §2.1.
    */
   repositionDeployedUnit(unitId: UnitId, newPosition: Point): void {
     this.requirePhase("Deploy");

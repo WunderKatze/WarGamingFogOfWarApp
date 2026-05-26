@@ -14,7 +14,7 @@
  *   "X-1A"                -> "X-1A 2"  (the trailing token isn't a number)
  *
  * Collisions skip the busy values, so cloning "Alpha 2" when "Alpha 3"
- * already exists yields "Alpha 4". See docs/features/deployment-stop-gap.md
+ * already exists yields "Alpha 4". See docs/features/v1/deployment-stop-gap.md
  * §2.4 / §4 decision 6.
  */
 export function nextCloneName(

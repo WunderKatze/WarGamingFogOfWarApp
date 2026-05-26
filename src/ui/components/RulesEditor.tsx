@@ -15,7 +15,7 @@ import {
 
 /**
  * Editor panel for runtime-mutable vision rules. Mounted inside the Game
- * menu's "Adjust Vision Rules" sub-panel. See `docs/features/game-menu.md`.
+ * menu's "Adjust Vision Rules" sub-panel. See `docs/features/v1/game-menu.md`.
  *
  * Each rule value is a free-form numeric input. Edits commit on every
  * change that parses to a positive number; invalid drafts stay in the

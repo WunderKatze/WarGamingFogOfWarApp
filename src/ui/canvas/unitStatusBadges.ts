@@ -8,7 +8,7 @@ export interface UnitStatusBadgeSets {
 }
 
 /**
- * Per docs/features/vision-rules-tweaks.md §2.4, the dug-in and Gone to
+ * Per docs/features/v1/vision-rules-tweaks.md §2.4, the dug-in and Gone to
  * Ground badges are visible on every unit MapCanvas renders — own and
  * revealed enemies alike. Enemies that aren't visible to the active
  * player simply aren't passed to MapCanvas, so they don't render the

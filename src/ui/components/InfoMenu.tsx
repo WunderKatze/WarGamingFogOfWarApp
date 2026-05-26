@@ -1,7 +1,6 @@
 import ms from "milsymbol";
 import { useMemo, type CSSProperties } from "react";
 import type { Game } from "../../core/Game.js";
-import type { GameMap } from "../../core/map/GameMap.js";
 import {
   polygonTerrainCatalog,
   wallTerrainCatalog,
@@ -10,6 +9,7 @@ import { getRules } from "../../core/rules.js";
 import type { Point, TeamId } from "../../core/types.js";
 import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
+import { getStealthAtPosition } from "../canvas/effectiveStealth.js";
 import { buildSidc } from "../canvas/sidc.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useMapEditorContext } from "../hooks/useMapEditorContext.js";
@@ -108,7 +108,7 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
     ? revealed ? "Revealed" : "Not revealed"
     : revealed ? "Revealed" : "Detected";
 
-  const stealth = getStealthAtPosition(unit, position, game.state.map);
+  const positionStealth = getStealthAtPosition(unit, position, game.state.map);
   // GtG only stacks during *concealed* discovery checks — see
   // vision-rules-tweaks §2.3. At this position, "concealed" means the
   // highest applicable stealth modifier (terrain + inherent) is >1. The
@@ -116,11 +116,19 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
   // in the open). Reflect that in the display: badge says "is GtG",
   // stealth line only shows the stacked product when concealment makes
   // it real.
-  const isConcealedHere = stealth.value > 1;
+  const isConcealedHere = positionStealth.value > 1;
   const isGtg = game.isGoneToGround(unit);
   const gtgApplies = isGtg && isConcealedHere;
   const gtgMultiplier = getRules().goneToGroundStealthModifier;
-  const totalStealth = stealth.value * (gtgApplies ? gtgMultiplier : 1);
+  const intrinsicStealth = unit.getIntrinsicStealth();
+  const totalStealth = intrinsicStealth * positionStealth.value * (gtgApplies ? gtgMultiplier : 1);
+  // Build a compact "×A × ×B × ×C" breakdown of all contributing factors,
+  // omitting ×1 factors. Shown alongside the combined total when there's
+  // more than one contributing factor.
+  const factors: string[] = [];
+  if (intrinsicStealth !== 1) factors.push(`×${formatMultiplier(intrinsicStealth)} intrinsic`);
+  if (positionStealth.value !== 1) factors.push(`×${formatMultiplier(positionStealth.value)} ${positionStealth.source}`);
+  if (gtgApplies) factors.push(`×${formatMultiplier(gtgMultiplier)} GtG`);
   const pos = position;
 
   return (
@@ -141,13 +149,12 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
         <span>·</span>
         <span>{visionLabel}</span>
         <span>·</span>
-        {gtgApplies ? (
-          <span>
-            Stealth ×{stealth.value} ({stealth.source}) × ×{gtgMultiplier} (Gone to Ground) = ×{totalStealth}
-          </span>
-        ) : (
-          <span>Stealth ×{stealth.value} ({stealth.source})</span>
-        )}
+        <span>Vision {formatInches(unit.getVision())}″</span>
+        <span>·</span>
+        <span>
+          Stealth ×{formatMultiplier(totalStealth)}
+          {factors.length >= 2 ? ` (${factors.join(" × ")})` : ""}
+        </span>
       </div>
       {isGtg && (
         <div style={detailRowStyle}>
@@ -228,43 +235,16 @@ function MiniSymbol({ unit, perspectiveTeamId }: { unit: Unit; perspectiveTeamId
   );
 }
 
-interface StealthAtPosition {
-  /** The single applied multiplier (1 means no modifier). */
-  value: number;
-  /** Human label of the modifier source (e.g. "Tall Woods", "dug in", "none"). */
-  source: string;
+/** "85.3" not "85.30"; "64" not "64.0". */
+function formatInches(n: number): string {
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? r.toString() : r.toFixed(1);
 }
 
-/**
- * Highest concealment multiplier applying to a stationary unit at `position`.
- * Pools the unit's inherent modifier (e.g. dug-in) with the area-terrain
- * modifiers of any polygon containing the position. Per VisionCalculator only
- * the single highest modifier is used — they don't stack.
- *
- * Walls aren't considered: their modifier is ray-based, not position-based.
- */
-function getStealthAtPosition(unit: Unit, position: Point, map: GameMap): StealthAtPosition {
-  const candidates: { mod: number; label: string }[] = [];
-
-  const inherent = unit.getInherentConcealmentModifier();
-  if (inherent > 1) {
-    // Infantry dug-in is currently the only inherent source > 1; the label
-    // is derived from the well-known dugInStealthModifier value rather than
-    // an instance check. When another inherent source is added, this can
-    // promote to a virtual on Unit.
-    candidates.push({ mod: inherent, label: inherent === getRules().dugInStealthModifier ? "dug in" : "inherent" });
-  }
-
-  for (const poly of map.polygons) {
-    if (!poly.containsPoint(position)) continue;
-    const entry = polygonTerrainCatalog[poly.terrainType];
-    candidates.push({ mod: entry.stealthMultiplier, label: entry.displayName });
-  }
-
-  if (candidates.length === 0) return { value: 1, source: "none" };
-  let best = candidates[0]!;
-  for (const c of candidates) if (c.mod > best.mod) best = c;
-  return { value: best.mod, source: best.label };
+/** Render a stealth multiplier compactly: 1.33 → "1.33", 2 → "2". */
+function formatMultiplier(n: number): string {
+  const r = Math.round(n * 100) / 100;
+  return Number.isInteger(r) ? r.toString() : r.toFixed(2).replace(/\.?0+$/, "");
 }
 
 const panelStyle: CSSProperties = {

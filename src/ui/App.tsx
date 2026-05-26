@@ -1,10 +1,12 @@
 import { GameMap } from "../core/map/GameMap.js";
 import { TerrainPolygon } from "../core/map/TerrainPolygon.js";
 import { TerrainWall } from "../core/map/TerrainWall.js";
+import { DiscoveryVisualizerPanel } from "./components/DiscoveryVisualizerPanel.js";
 import { GameMenu } from "./components/GameMenu.js";
 import { InfoMenu } from "./components/InfoMenu.js";
 import { MapEditor } from "./components/MapEditor.js";
 import { DebugProvider } from "./hooks/useDebugContext.js";
+import { DiscoveryVisualizerProvider } from "./hooks/useDiscoveryVisualizerContext.js";
 import { useGame } from "./hooks/useGame.js";
 import { GameProvider, useGameContext } from "./hooks/useGameContext.js";
 import { MapEditorProvider, useMapEditorContext } from "./hooks/useMapEditorContext.js";
@@ -71,10 +73,13 @@ export function App() {
         <DebugProvider>
           <MapEditorProvider>
             <SelectionProvider>
-              <Header />
-              <ViewRouter />
-              <InfoMenu />
-              <GameMenu />
+              <DiscoveryVisualizerProvider>
+                <Header />
+                <ViewRouter />
+                <InfoMenu />
+                <DiscoveryVisualizerPanel />
+                <GameMenu />
+              </DiscoveryVisualizerProvider>
             </SelectionProvider>
           </MapEditorProvider>
         </DebugProvider>

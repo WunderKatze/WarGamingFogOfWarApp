@@ -1,6 +1,7 @@
 import type { Game } from "../../core/Game.js";
 import type { UnitId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
+import { DiscoveryVisualizerOverlay } from "../canvas/DiscoveryVisualizerOverlay.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
@@ -90,6 +91,7 @@ export function FireDeclareView() {
           onHoveredTerrainChange={setHoveredTerrainHit}
           onCursorOnMapChange={setCursorOnMap}
           onMapClick={handleMapClick}
+          overlay={<DiscoveryVisualizerOverlay perspectiveTeamId={active} />}
         />
       </main>
     </div>

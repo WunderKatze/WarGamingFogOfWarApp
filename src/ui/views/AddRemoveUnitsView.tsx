@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Game } from "../../core/Game.js";
 import type { Point, UnitId, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
+import { DiscoveryVisualizerOverlay } from "../canvas/DiscoveryVisualizerOverlay.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
@@ -193,6 +194,7 @@ export function AddRemoveUnitsView() {
           onHoveredTerrainChange={setHoveredTerrainHit}
           onCursorOnMapChange={setCursorOnMap}
           onMapClick={handlePlace}
+          overlay={<DiscoveryVisualizerOverlay perspectiveTeamId={activePlayer} />}
         />
       </main>
     </div>

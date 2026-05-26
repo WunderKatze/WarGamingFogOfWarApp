@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Game } from "../../core/Game.js";
 import type { Point, UnitId, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
+import { DiscoveryVisualizerOverlay } from "../canvas/DiscoveryVisualizerOverlay.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
@@ -389,8 +390,9 @@ export function MoveView() {
           onMapPointerMove={handlePointerMove}
           draggable={!activeMove}
           overlay={
-            activeMove && selected
-              ? (
+            <>
+              <DiscoveryVisualizerOverlay perspectiveTeamId={active} />
+              {activeMove && selected && (
                 <MovePreviewOverlay
                   unit={selected}
                   origin={activeMove.origin}
@@ -398,8 +400,8 @@ export function MoveView() {
                   cursor={activeMove.cursor}
                   perspectiveTeamId={active}
                 />
-              )
-              : null
+              )}
+            </>
           }
         />
       </main>

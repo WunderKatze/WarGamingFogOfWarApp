@@ -2,118 +2,162 @@
 
 **Status:** Draft
 **Owner:** Ryan
-**Last Updated:** 2026-05-25
+**Last Updated:** 2026-05-26
 
 > **Purpose.** Comprehensive view of what V2 hopes to achieve so we can converge on a feature list and an execution order. **Not** a single-feature spec — this is the planning doc that births the V2 feature docs that will live alongside it in [docs/features/v2/](.).
 >
 > **What this app is.** A **tabletop wargame companion** — it mirrors the player's physical table, tracks the state that's hard to do in your head (fog of war, vision rules, turn flow), and offers planning aids. It does **not** replace the physical experience: units are still moved by hand on the real table, fires are still resolved by rolling real dice, casualties are still removed physically. The app helps the player *decide and remember*; the table is where things actually happen. Any V2 feature that drifts toward replacing the table (e.g., rolled combat resolution, automated damage application, simulated dice) is out of scope by construction.
 >
-> **How this doc evolves.** Sections start sparse with seed entries. As we converge, candidate features get §4 expansions, OQs get answered into §6 decisions, and §7 fills in. Once §7 is locked, individual features spin off into their own `docs/features/v2/<feature>.md` and this doc becomes the table of contents.
+> **How this doc evolves.** Each entry below is short by design — full scope, edge cases, decisions, and OQs live in each feature's own doc once it spins off. As features get their own Draft, link them from §10. This doc stabilizes once §3's execution order is locked.
 
 ---
 
 ## 1. V1 retrospective
 
-What V1 actually shipped (for context — full details in [docs/features/v1/](../v1/)):
+V1 shipped the tabletop-companion foundation: map model + rendering, the see/discover/reveal vision pipeline (with Gone to Ground and Recon), the Deploy → Move → FireDeclare turn machine, in-app map and rules editors with named JSON saves, the InfoMenu with full stealth/vision math, and the Discovery Visualizer planning aid. See [docs/features/v1/](../v1/) for the full Complete list.
 
-- **Map model & rendering** — polygons + walls with terrain-typed stealth and LOS rules; Konva canvas with pan/zoom.
-- **Vision pipeline** — see / discover / mutual-detection / reveal cascade; per-team vision lists; Gone to Ground stealth stacking; Recon trait (vision multiplier + GtG-keeps-on-move).
-- **Game state machine** — Deploy → Transition → AddRemoveUnits → Move → FireDeclare → Transition, with first-player select and per-turn cross-turn flags.
-- **Editing surfaces** — map editor (draw-direct polygons/walls, save/load JSON), rules editor with named rule sets (save/load JSON), info menu with stealth+vision math.
-- **Planning aids** — Discovery Visualizer (incoming/outgoing rings against a chosen threat lens).
-- **Debug** — show-all-units toggle with cross-turn audit notice.
-
-**V1 set the foundation as a usable tabletop companion.** Players can deploy, move (with preview), declare fire (which feeds reveal), and end turn — the app tracks what the table can't easily track (fog of war, per-ray discovery math, GtG persistence). V2 is where the companion gets richer: more state to track, more planning aids, better authoring, and persistence across sessions.
+The game is *playable* end-to-end as a companion — the player can run a 2-side fog-of-war game at the table, with the app handling everything the table can't easily do.
 
 ---
 
-## 2. V2 themes
+## 2. V2 in one paragraph
 
-*High-level directions V2 is pursuing. Edit / add / strike as we converge. Every theme below must respect the "companion, not replacement" framing in §0.*
-
-1. **State the app tracks for the player.** Things that are hard to remember at the table — order/posture markers (overwatch, suppression, etc. — recorded *by* the player, not derived), casualty / removed-unit history, turn-by-turn audit trail.
-2. **Logistics & roster depth.** Reinforcements / transports — companion-side tracking for off-board reserves and unit-carrying-unit relationships. Successor to V1's mid-game-roster stop-gap.
-3. **More planning aids.** Fire-range visualizer (same shape as the discovery rings), wall/ray-direction visualization, multi-unit "where can my whole force see" overlays.
-4. **Persistence.** Save / load full game state, not just rule sets and maps. Resume a paused game; share a snapshot for bug reports.
-5. **Terrain authoring quality of life.** The [terrain-collection model](terrain-collection.md) supersedes draw-direct.
-6. **(Add or strike as needed.)**
+V2 starts with **two ordered pre-feature passes** — a code-health survey (with an OO / extensibility focus) and a **mechanics refactor** that adds rule-system abstraction so this codebase can later serve more than just the current 1/100-scale WWII ruleset. After those land, V2 ships a small set of **refinements** to V1 surfaces that aren't quite right yet (unit deployment, terrain authoring, save/load bugs), then a set of **new general features** that fill in missing parts of the companion (transports, the Glimpse mechanic, fast movers / aircraft, area-attack / artillery blind-fire detection, detect-by-movement / mines). Every feature gets its own doc.
 
 ---
 
-## 3. Carryovers from V1
+## 3. Execution order
 
-Known items that were deliberately punted or left incomplete in V1 and need V2 disposition:
+V2 work proceeds in four serial phases. Items within a phase can interleave; items across phases cannot.
+
+**Phase A — Code-health pass.** Survey of current code against established software-engineering standards. Focus on OO design opportunities and extensibility weaknesses (the codebase must remain extensible — particularly as Phase B introduces new abstractions). No new features land during this phase. See §4.1.
+
+**Phase B — Mechanics refactor.** Introduces the layers of abstraction needed for the codebase to support multiple rule systems — variable vision rules, alternative map types (hex / grid), different unit base values. The current 1/100-scale WWII ruleset becomes one configuration of the refactored mechanics, not the only thing the code knows how to be. Gets its own deep-dive document. No new features land during this phase. See §4.2.
+
+**Phase C — Refinements to V1 features.** Three V1 surfaces that need a second pass before V2 builds further on them. Each gets its own doc. See §5.
+
+**Phase D — New general features.** Five new companion mechanics. Each gets its own doc; order within phase TBD. See §6.
+
+---
+
+## 4. Pre-feature work (Phase A + B)
+
+### 4.1 Code Health Pass
+
+A structured survey of the V1 codebase against established software-engineering standards, especially OO design. Goals:
+- Identify duplicated logic that should consolidate into a class / catalog / registry.
+- Identify abstractions that leak (e.g. UI types referencing core invariants).
+- Identify places where the V1 shape made an "OK for now" choice that's about to bend badly under Phase B's abstraction work.
+
+Output: a short report (its own doc) + a sequence of refactor commits. Refactors should be behavior-preserving and individually committable.
+
+### 4.2 Mechanics Refactor (rule-system abstraction)
+
+Currently V1's mechanics are hard-coded to one wargame — a 1/100-scale WWII ruleset. The model layer reflects that: `Unit` knows `Tank` vs `Infantry`, the rules object knows `Recon` as the one modifier, the map knows three polygon terrain kinds and two wall kinds, vision is range-divided-by-stealth with one specific GtG rule, and the turn machine is a fixed `Deploy → Move → FireDeclare → Transition` sequence with each player taking a full turn at a time.
+
+V2 layers new abstractions on top so a different ruleset (different unit types, different map geometry like hex / grid, different base values) can be loaded as a configuration rather than a fork. This is the architectural shift that lets the WWII ruleset keep developing in parallel with future rulesets without churning each other.
+
+The refactor has three identified axes:
+
+1. **Turn / phase flow.** The current fixed phase sequence is one game's turn structure. Other wargames vary widely:
+   - Alternating-by-phase: P1 moves, P2 moves, P1 shoots, P2 shoots.
+   - Activation-based: a player activates only a handful of units before the turn order swaps.
+   - Initiative-based, simultaneous, hybrid, etc.
+   
+   The refactor decomposes the current `Game` state-machine into a **grab bag of reusable building blocks** (phase definitions, transition rules, activation models, end-of-turn triggers) that a game flow is composed from. Authoring a new turn structure means assembling existing blocks, not editing the state-machine class.
+
+2. **Vision rules.** Most pieces (GtG stacking, edge grace, dug-in, single-highest-modifier-pool, Recon trait, etc.) are this ruleset's choices and need to become opt-in / configurable rather than baked into `VisionCalculator`. The discover algorithm itself stays — but the modifiers and the per-phase wiring that uses them become a configuration. **The single invariant across all wargames this codebase will represent:** discovery happens when `distance ≤ observer.vision / target.effective_stealth`. That formula is the load-bearing primitive everything else slots into; the refactor preserves it, generalizes everything around it.
+
+3. **Map model.** Free-position inches (current V1 model) is one geometry. Hex and square-grid are alternatives. The polygon / wall catalog model already extends well — the bigger lift is the position substrate and how units snap / move on it.
+
+This is significant scope and gets its own document. The goal here is the *separation* — concrete second/third rulesets are out of scope for V2; we just want the abstraction to exist and be exercised by at least one alternative test ruleset (likely a stripped-down "alternate turn-flow" ruleset that proves the building-block model works, not a fully-realized different game).
+
+---
+
+## 5. Refinements (Phase C)
+
+Each item gets its own feature doc.
+
+### 5.1 Enhanced unit creation / deployment
+
+V1's Deploy phase + the deployment-stop-gap (clone, rename, reposition) work but feel rough — pen-based one-at-a-time placement isn't ergonomic for setting up a 20-unit force. Scope-TBD refinements to make initial roster build-out faster: templates, multi-place, force-list import, etc. The specific refinements get fleshed out in the feature doc.
+
+### 5.2 Enhanced terrain deployment
+
+Successor to draw-direct map editing. The [terrain-collection.md](terrain-collection.md) Draft (parked from earlier) is the existing scoping work for this — V2 picks it back up and ships it. Reusable terrain pieces with real-world identity (named, fixed-dimension, owned-in-N-copies), placed by dragging from a collection sidebar.
+
+### 5.3 Save / load bug fixes
+
+The known issues in V1's save/load surfaces. Includes the [v1/game-menu.md](../v1/game-menu.md) Import bug (the reason that doc is still Approved-not-Complete) and any related save/load issues found during the Phase A health pass. Small scope; gets its own doc mostly so it's tracked.
+
+---
+
+## 6. New general features (Phase D)
+
+Each item gets its own feature doc.
+
+### 6.1 Transport unit subclass
+
+A unit subclass that can **carry** other units and represent that they're being carried. Companion-side state tracking — what's mounted in what, when it dismounts, what that means for the carried units' visibility and posture. Direct successor in spirit to V1's mid-game-roster stop-gap which only handled bare add/remove.
+
+### 6.2 Glimpse mechanic
+
+If a unit starts a move out of vision (of any enemy) and ends a move out of vision, but its *path* between start and end would have put it in vision of an enemy unit at some intermediate point, the app should **detect** that crossing and **represent it to the player**. Otherwise an observing unit would silently miss fast units driving past — the table doesn't naturally surface this, so the companion must.
+
+### 6.3 Fast mover unit subclass
+
+A unit subclass for things that move so fast they don't really "occupy" a position over a turn — primarily aircraft, but abstracted as "Fast mover" so other rulesets can use the same machinery. The player places one anywhere on the table, the app surfaces what it would see / be seen by during that turn, and it's removed at the end of the turn to represent leaving the field of battle.
+
+### 6.4 Area attacks (artillery)
+
+Area attacks are geometric — a template (circle / rectangle / template-of-the-day) covers a region. The intent is that **for visible models on the table, players resolve geometric attacks themselves** (it's table-side geometry; the companion doesn't need to compute it). But there's a critical subcase: a player might **fire blind at suspected enemy positions**, and the app needs to detect when a blind area attack actually overlaps an enemy unit and communicate that to the *defending* player — without giving the *attacking* (turn) player any information beyond "your attack landed where you said."
+
+### 6.5 Detect by movement
+
+A general proximity mechanic: if a unit attempts to move *through* (within some radius of) an enemy it doesn't currently see, that crossing should be detected. The detection enables a family of rules — for example, "the moving unit is stopped early and placed right in front of the enemy it tried to walk through" is a likely default response. Also a natural substrate for **land mines**: a mine is a hidden entity that triggers a detect-by-movement event when entered.
+
+---
+
+## 7. Carryovers from V1 (not yet scheduled into V2)
+
+Small items deferred from V1 docs that aren't yet promoted into Phase C/D. Track here so they're not lost; promote into a phase when scheduled.
 
 | Item | Source | Notes |
 |---|---|---|
-| Game-menu Import + Debug-notice bugs | [v1/game-menu.md](../v1/game-menu.md) is Approved-not-Complete | Two small bugs deferred from V1; fix and flip Complete, or roll into a broader Game Menu V2 pass. |
-| Terrain Collection model | [terrain-collection.md](terrain-collection.md) | Draft, parked. Decide if this lands early in V2 (replaces draw-direct) or middle/late. |
-| Fire / weapon range visualizer | [v1/discovery-visualizer.md](../v1/discovery-visualizer.md) §6 Out of Scope | Same UI shape as discovery rings; lands when fire combat lands. |
-| Wall / ray-direction visualization | [v1/discovery-visualizer.md](../v1/discovery-visualizer.md) §6 Out of Scope | Ray-scan mode that shades walls' shadows; nice-to-have. |
-| localStorage persistence of Visualizer settings | [v1/discovery-visualizer.md](../v1/discovery-visualizer.md) §6 | Trivial; lands whenever convenient. |
+| Game-menu Debug-notice bug | [v1/game-menu.md](../v1/game-menu.md) | Separate from the Import bug captured in §5.3; possibly cleanups inside §5.3's doc. |
+| Fire / weapon range visualizer | [v1/discovery-visualizer.md](../v1/discovery-visualizer.md) §6 | Same UI shape as discovery rings; a planning aid for "how close do I need to be to fire." Could ride a future minor doc. |
+| Wall / ray-direction visualization | [v1/discovery-visualizer.md](../v1/discovery-visualizer.md) §6 | Ray-scan shading for walls' shadows. |
+| localStorage persistence of Visualizer settings | [v1/discovery-visualizer.md](../v1/discovery-visualizer.md) §5 | Trivial; folds into any visualizer pass. |
+| Photo-backdrop map editor workflow | [v1/map-editor.md](../v1/map-editor.md) | Mentioned as out-of-scope in V1; could fold into §5.2 or stay separate. |
 
 ---
 
-## 4. Candidate features
+## 8. Out of scope for V2
 
-*One entry per V2 idea. Format: short pitch + status. Promote a candidate to its own `docs/features/v2/<name>.md` when scope is converged enough to write a Draft.*
+Things explicitly NOT V2 — captured so they don't accidentally creep in. All follow from the §0 companion framing.
 
-### 4.1 Casualty / removal tracking
-*To be defined.* Today `deleteUnit` is a one-shot — removing a unit erases it. The companion should remember what was removed and when (turn, position, possibly cause as recorded by the player). Supports post-game review and the "did that unit fire last turn" question.
-
-### 4.2 Order / posture markers
-*To be defined.* Beyond GtG / dug-in, real wargames use orders like Overwatch, Suppressed, Pinned, Bailed-out, Reserve, etc. The companion records what the player declared at the table; no rules engine *acts* on the markers, but they're visible on tokens and surfaced in the InfoMenu so the player doesn't have to remember.
-
-### 4.3 Reinforcements / transport
-*To be defined.* Successor to V1's mid-game-roster stop-gap. Off-board reserves entering via designated map edges. Unit-carries-unit relationships (transport mounting / dismounting). Per-side reinforcement schedule the companion enforces.
-
-### 4.4 Terrain Collection
-See [terrain-collection.md](terrain-collection.md) (Draft parked). Reusable terrain pieces with real-world identity; drag-from-collection placement.
-
-### 4.5 Save / load full game state
-*To be defined.* Snapshot the entire `Game` (state + map + rules), serialize, load. Useful for resuming mid-session pauses, sharing bug repros, replaying. Interacts with versioning.
-
-### 4.6 Fire-range visualizer
-*To be defined.* Same UI shape as the discovery rings — a circle around the unit showing weapon-range distance. Note: the companion knows weapon ranges (the player configures them), but does not resolve fires.
-
-### 4.7 Game-menu polish
-Fix Import + Debug-notice bugs from V1 ([v1/game-menu.md](../v1/game-menu.md)). Possibly expand into a broader menu pass (preferences, profiles, etc.).
-
-### 4.8 *(Add candidates as they come up.)*
-
----
-
-## 5. Out of scope for V2
-
-*Things explicitly NOT V2 — captured here so we don't accidentally let them creep in.*
-
-- **Rolled combat resolution.** Fires are resolved at the physical table with physical dice. The app records who fired (already does — `firedThisTurn`) and surfaces the reveal consequence, but never simulates a roll, computes damage, or removes a unit because of combat math. Per §0, this is true by construction.
-- **Automated unit removal.** Removal is the player's call (executed via Delete during AddRemoveUnits or Move), based on what happened at the table. The app doesn't decide.
+- **Rolled combat resolution.** Fires are resolved at the physical table with physical dice. The app records who fired (already does — `firedThisTurn`) and surfaces the reveal consequence, but never simulates a roll, computes damage, or removes a unit because of combat math.
+- **Automated unit removal.** Removal is the player's call, based on what happened at the table. The app doesn't decide.
 - **Simulated AI opponents.** This is a 2+ human player companion; no AI side.
+- **Concrete second / third rulesets.** Phase B builds the abstraction; actually authoring a non-WWII ruleset is V3+.
 
 ---
 
-## 6. Open questions
+## 9. Open questions
 
-1. **What's the V2 cadence?** Single big release, or rolling small features? Affects how aggressively we batch.
-2. **How much of the V1 stop-gap (mid-game-roster) survives once transports/reinforcements land?** Full replacement, or augmentation?
-3. **Order/posture markers — fixed vocabulary or extensible?** Hard-coded list (Overwatch, Suppressed, …) or rules-editor-defined like terrain types?
-4. *(Add as they come up.)*
-
----
-
-## 7. Proposed execution order
-
-*To be filled once §4 + §6 converge.*
-
-1. *(TBD)*
-2. *(TBD)*
+1. **Does Phase A produce one report + refactor commits, or split into "survey commit" → "refactor PR(s)" → "lessons-learned commit"?** Affects how visible the survey work is in the history.
+2. **Phase B scope ceiling.** How much abstraction is "enough" before we stop and let features build on it? Easy to over-build; easy to under-build and need a Phase B-2 later. The Phase B doc needs to pin this down.
+3. **Game-menu Import + Debug-notice bug split.** Are both squarely §5.3, or does Debug-notice belong elsewhere?
+4. **Glimpse cost model.** Per-move ray-march every cursor frame, or only on commit? Affects how snappy MoveView feels.
+5. **Area-attack template authoring.** Built-in template shapes only, or player-editable templates (like terrain in the map editor)?
+6. **Detect-by-movement granularity.** Path-segment intersection check, or continuous proximity sweep? Trade-off between accuracy and cost.
+7. *(Add as they come up.)*
 
 ---
 
-## 8. Index of V2 feature docs
+## 10. Index of V2 feature docs
 
-Once individual V2 features get their own Draft docs, list them here:
+As individual features spin off into Draft docs, list them here. Each line: doc + status + phase.
 
-- [terrain-collection.md](terrain-collection.md) — Draft (parked)
+- [terrain-collection.md](terrain-collection.md) — Draft (parked) — Phase C §5.2
 - *(more to come)*

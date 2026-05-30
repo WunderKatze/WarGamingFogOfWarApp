@@ -159,5 +159,6 @@ Things explicitly NOT V2 — captured so they don't accidentally creep in. All f
 
 As individual features spin off into Draft docs, list them here. Each line: doc + status + phase.
 
+- [mechanics-refactor.md](mechanics-refactor.md) — Draft — Phase B §4.2
 - [terrain-collection.md](terrain-collection.md) — Draft (parked) — Phase C §5.2
 - *(more to come)*

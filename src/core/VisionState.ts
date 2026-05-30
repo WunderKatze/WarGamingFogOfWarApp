@@ -10,16 +10,40 @@ import type { TeamId, UnitId } from "./types.js";
  * - `revealed` is the set of unit IDs that are currently publicly known
  *   (placed on the physical table).
  */
-export interface VisionState {
-  individualLists: Map<UnitId, Set<UnitId>>;
-  teamLists: Map<TeamId, Set<UnitId>>;
-  revealed: Set<UnitId>;
+export class VisionState {
+  readonly individualLists: Map<UnitId, Set<UnitId>> = new Map();
+  readonly teamLists: Map<TeamId, Set<UnitId>> = new Map();
+  readonly revealed: Set<UnitId> = new Set();
+
+  /**
+   * Remove every reference to a deleted unit. A unit can appear in three
+   * roles and all three are dropped here:
+   *   - as observer — its own individual-list entry (the map key)
+   *   - as target — in every other observer's individual-list value set,
+   *     and in every team-list value set
+   *   - as revealed — its membership in the revealed set
+   *
+   * Called by Game.deleteUnit so VisionState stays consistent when a unit
+   * is removed mid-game. `firedThisTurn` is on GameState, not here, and
+   * is cleaned up separately by Game.
+   */
+  removeUnit(unitId: UnitId): void {
+    this.individualLists.delete(unitId);
+    this.revealed.delete(unitId);
+    for (const teamList of this.teamLists.values()) {
+      teamList.delete(unitId);
+    }
+    for (const list of this.individualLists.values()) {
+      list.delete(unitId);
+    }
+  }
 }
 
+/**
+ * Construct an empty VisionState. Equivalent to `new VisionState()`;
+ * kept as a factory for call sites (mostly tests) that read more clearly
+ * with a named constructor.
+ */
 export function createEmptyVisionState(): VisionState {
-  return {
-    individualLists: new Map(),
-    teamLists: new Map(),
-    revealed: new Set(),
-  };
+  return new VisionState();
 }

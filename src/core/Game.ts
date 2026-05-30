@@ -254,14 +254,7 @@ export class Game {
     }
     this.requireOwnUnit(unitId);
     this.state.units = this.state.units.filter((u) => u.id !== unitId);
-    this.state.visionState.individualLists.delete(unitId);
-    this.state.visionState.revealed.delete(unitId);
-    for (const teamList of this.state.visionState.teamLists.values()) {
-      teamList.delete(unitId);
-    }
-    for (const list of this.state.visionState.individualLists.values()) {
-      list.delete(unitId);
-    }
+    this.state.visionState.removeUnit(unitId);
     this.state.firedThisTurn.delete(unitId);
   }
 

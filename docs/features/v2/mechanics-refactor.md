@@ -334,6 +334,8 @@ This is what makes R3 — and the whole refactor — visible and verifiable. A d
 ## 14. Definitions
 
 > Placeholder terms used throughout this doc. Names are not final (§11 D7) — this section is where each abstraction gets a one-line gloss as it lands in code, so we can revisit naming once the shape is real.
+>
+> **Source code is the firm anchor.** Each term gets its full definition (purpose, invariants, examples) in TSDoc / module-level comments inside the module that implements it. This table is an index pointing back into the code, not the canonical definition. When a name changes, the code's comment changes first and this table follows. Recorded in [code-health-pass.md §7 D4](code-health-pass.md#7-recorded-decisions).
 
 | Term (placeholder) | One-line gloss |
 |---|---|

@@ -26,4 +26,31 @@ export class Infantry extends Unit {
   override getInherentConcealmentModifier(): number {
     return this._dugIn ? getRules().dugInStealthModifier : 1;
   }
+
+  /**
+   * Infantry's move snapshot carries `dugIn` alongside the base
+   * position + goneToGround. Returned shape: `{ dugIn: boolean }`.
+   */
+  protected override captureSubclassMoveData(): { dugIn: boolean } {
+    return { dugIn: this._dugIn };
+  }
+
+  /**
+   * Restore the `dugIn` flag captured by captureSubclassMoveData. The
+   * cast is bounded to this method — pre-condition is that the data
+   * came from this same Infantry instance.
+   */
+  protected override applySubclassMoveData(data: unknown): void {
+    this._dugIn = (data as { dugIn: boolean }).dugIn;
+  }
+
+  /**
+   * Moving clears Infantry's dugIn state in addition to the base
+   * onMoved effects (goneToGround clearing). Mirrors
+   * vision-rules-tweaks.md §2.1.
+   */
+  override onMoved(): void {
+    super.onMoved();
+    if (this._dugIn) this._dugIn = false;
+  }
 }

@@ -337,11 +337,14 @@ describe("Game — Move phase", () => {
     expect((inf as Infantry).dugIn).toBe(true);
   });
 
-  it("Tank moveUnit does not crash or record priorDugIn", () => {
+  it("Tank moveUnit records a snapshot with null subclassData (no per-Tank state)", () => {
     const g = setupAtMove();
     g.moveUnit("u1", p(5, 5));  // u1 is a Tank
     expect(g.state.moveHistory).toEqual([
-      { unitId: "u1", priorPosition: { x: 0, y: 0 }, priorGoneToGround: true },
+      {
+        unitId: "u1",
+        snapshot: { position: { x: 0, y: 0 }, goneToGround: true, subclassData: null },
+      },
     ]);
   });
 
@@ -375,11 +378,14 @@ describe("Game — move history and undo", () => {
     return g;
   }
 
-  it("moveUnit pushes the unit's prior position onto moveHistory", () => {
+  it("moveUnit pushes a snapshot of the unit's prior state onto moveHistory", () => {
     const g = setupAtMove();
     g.moveUnit("u1", p(5, 5));
     expect(g.state.moveHistory).toEqual([
-      { unitId: "u1", priorPosition: { x: 0, y: 0 }, priorGoneToGround: true },
+      {
+        unitId: "u1",
+        snapshot: { position: { x: 0, y: 0 }, goneToGround: true, subclassData: null },
+      },
     ]);
   });
 
@@ -456,15 +462,17 @@ describe("Game — move history and undo", () => {
     expect(g.state.getUnitById("u1")?.getPosition()).toEqual({ x: 0, y: 0 });
     // Infantry untouched at its post-move position; its entry still on the stack.
     expect(g.state.getUnitById(inf.id)?.getPosition()).toEqual({ x: 2, y: 2 });
-    // Infantry has dugIn recorded too (priorDugIn=false because mid-game
-    // createUnit defaults to not-dug-in). priorGoneToGround=false because
+    // Infantry's snapshot carries dugIn in subclassData (false because mid-game
+    // createUnit defaults to not-dug-in). goneToGround=false because
     // createUnit also sets the in-flux GtG=false default.
     expect(g.state.moveHistory).toEqual([
       {
         unitId: inf.id,
-        priorPosition: { x: 1, y: 1 },
-        priorGoneToGround: false,
-        priorDugIn: false,
+        snapshot: {
+          position: { x: 1, y: 1 },
+          goneToGround: false,
+          subclassData: { dugIn: false },
+        },
       },
     ]);
   });

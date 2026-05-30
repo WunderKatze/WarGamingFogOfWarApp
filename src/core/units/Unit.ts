@@ -17,6 +17,29 @@ export interface UnitInit {
   goneToGround?: boolean;
 }
 
+/**
+ * Snapshot of every piece of unit state that a Move-phase move can mutate,
+ * captured before the move so an undo / revert can restore it.
+ *
+ * `position` and `goneToGround` are universal — every unit has them.
+ * `subclassData` is opaque to the base class: each subclass that has
+ * additional move-mutable state (e.g. Infantry's `dugIn`) defines its own
+ * shape via `captureSubclassMoveData` / `applySubclassMoveData`. The base
+ * treats this slot as opaque; subclasses own the cast on receive.
+ *
+ * Shape decision recorded in docs/features/v2/code-health-pass.md §7 D3:
+ * picked over a typed-per-subclass interface (which conflicts with Phase
+ * B's data-driven unit model) and over an `extra: Record<string, unknown>`
+ * (which invites scattered string-key access). The `unknown` slot is
+ * future-compatible: Phase B's modifier-snapshot composition slots into
+ * the same field as a same-shape renaming.
+ */
+export interface UnitMoveSnapshot {
+  readonly position: Point;
+  readonly goneToGround: boolean;
+  readonly subclassData: unknown;
+}
+
 export abstract class Unit {
   abstract readonly type: UnitType;
 
@@ -84,5 +107,68 @@ export abstract class Unit {
    */
   getInherentConcealmentModifier(): number {
     return 1;
+  }
+
+  /**
+   * Snapshot every piece of state that a Move-phase move can mutate.
+   * Captured by Game.moveUnit before the position changes, so
+   * undoLastMove / revertUnitMoves can restore the unit to its pre-move
+   * shape. Base captures position and goneToGround; subclasses with
+   * additional move-mutable state extend via the `subclassData` hook.
+   */
+  captureMoveSnapshot(): UnitMoveSnapshot {
+    return {
+      position: this._position,
+      goneToGround: this.goneToGround,
+      subclassData: this.captureSubclassMoveData(),
+    };
+  }
+
+  /**
+   * Restore a snapshot produced by captureMoveSnapshot on this same unit.
+   * Pre-condition: the snapshot was produced by this very instance, so its
+   * `subclassData` matches what this class's applySubclassMoveData expects.
+   * No runtime cross-class check.
+   */
+  applyMoveSnapshot(snap: UnitMoveSnapshot): void {
+    this._position = snap.position;
+    this.goneToGround = snap.goneToGround;
+    this.applySubclassMoveData(snap.subclassData);
+  }
+
+  /**
+   * Subclass hook for capturing additional move-mutable state. Default:
+   * no subclass state. Override returns a value of any shape; the same
+   * value is handed back to applySubclassMoveData on restore. The base
+   * class treats the result as opaque.
+   */
+  protected captureSubclassMoveData(): unknown {
+    return null;
+  }
+
+  /**
+   * Subclass hook for applying data captured by captureSubclassMoveData.
+   * Default: no-op. Each subclass owns the type of `data` it expects and
+   * casts at receive — this is the single cast site per subclass for
+   * snapshot data.
+   */
+  protected applySubclassMoveData(_data: unknown): void {
+    // base default: no subclass state to apply.
+  }
+
+  /**
+   * Apply per-unit side effects that follow a Move-phase move. Called by
+   * Game.moveUnit after setPosition. Base clears goneToGround unless a
+   * modifier prevents it (currently: Recon, see vision-recon-tweaks §2.2);
+   * subclasses extend to clear additional move-broken state.
+   *
+   * Phase B note: the Recon-modifier check here will move into a
+   * modifier-behavior pipeline once Axis 2 lands; this method becomes
+   * the place that calls into it.
+   */
+  onMoved(): void {
+    if (!this.hasModifier("Recon")) {
+      this.goneToGround = false;
+    }
   }
 }

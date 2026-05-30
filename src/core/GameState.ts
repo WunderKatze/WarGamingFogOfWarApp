@@ -1,32 +1,19 @@
 import { GameMap } from "./map/GameMap.js";
-import type { Point, TeamId, UnitId } from "./types.js";
-import { Unit } from "./units/Unit.js";
+import type { TeamId, UnitId } from "./types.js";
+import { Unit, type UnitMoveSnapshot } from "./units/Unit.js";
 import { createEmptyVisionState, type VisionState } from "./VisionState.js";
 
 /**
- * One entry in the per-Move-phase undo stack. Records the unit and the
- * position it occupied immediately before the move that's being recorded.
- * A multi-segment waypoint path produces a single entry whose
- * `priorPosition` is the pre-path position.
+ * One entry in the per-Move-phase undo stack. Holds the unit's id plus a
+ * full pre-move snapshot of every piece of state the move can mutate.
+ * The snapshot's shape (`UnitMoveSnapshot`) is owned by Unit; subclasses
+ * extend it through the `subclassData` hook (see Unit.captureMoveSnapshot).
+ * A multi-segment waypoint path produces a single entry whose snapshot
+ * is the pre-path state.
  */
 export interface MoveHistoryEntry {
   unitId: UnitId;
-  priorPosition: Point;
-  /**
-   * Pre-move dug-in flag for Infantry. Recorded alongside the position
-   * so `undoLastMove` / `revertUnitMoves` can restore both — per
-   * docs/features/v1/vision-rules-tweaks.md §2.1, moveUnit clears dug-in
-   * on Infantry, and undoing a move must restore it. Absent for Tanks
-   * (no dug-in concept) and for any future unit type that doesn't
-   * support the flag.
-   */
-  priorDugIn?: boolean;
-  /**
-   * Pre-move Gone to Ground flag. Always recorded (every unit type has
-   * one) so undoing a move restores GtG to whatever it was before the
-   * move broke it. See vision-rules-tweaks §2.3.
-   */
-  priorGoneToGround: boolean;
+  snapshot: UnitMoveSnapshot;
 }
 
 export type GamePhase =

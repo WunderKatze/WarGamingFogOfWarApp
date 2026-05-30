@@ -170,30 +170,18 @@ export class Game {
   moveUnit(unitId: UnitId, newPosition: Point): void {
     this.requirePhase("Move");
     const unit = this.requireOwnUnit(unitId);
-    // Snapshot dug-in and goneToGround alongside position so
-    // undoLastMove / revertUnitMoves can restore them — per
-    // docs/features/v1/vision-rules-tweaks.md §2.1 / §2.3, moving clears
-    // both, and undoing a move should restore the unit's prior state.
-    const priorDugIn = unit instanceof Infantry ? unit.dugIn : undefined;
-    this.state.moveHistory.push({
-      unitId,
-      priorPosition: unit.getPosition(),
-      priorGoneToGround: unit.goneToGround,
-      ...(priorDugIn !== undefined && { priorDugIn }),
-    });
+    this.state.moveHistory.push({ unitId, snapshot: unit.captureMoveSnapshot() });
     unit.setPosition(newPosition);
-    if (unit instanceof Infantry && unit.dugIn) unit.setDugIn(false);
-    // Recon keeps GtG when moving — movement is part of the scout identity.
-    // See docs/features/v1/vision-recon-tweaks.md §2.2.
-    if (!unit.hasModifier("Recon")) unit.goneToGround = false;
+    unit.onMoved();
     this.state.movedThisTurn.add(unitId);
   }
 
   /**
    * Pops the most recent entry from `moveHistory` and restores that unit's
-   * prior position. If the popped entry's unit no longer exists (it was
-   * deleted since), silently skips it and pops the next one, until either a
-   * living unit is restored or the stack is empty.
+   * full pre-move snapshot (position, goneToGround, plus any subclass
+   * state like Infantry's dugIn). If the popped entry's unit no longer
+   * exists (it was deleted since), silently skips it and pops the next
+   * one, until either a living unit is restored or the stack is empty.
    *
    * Does **not** run the vision phase — vision only runs at the
    * `startTurn`/`endMove`/`endTurn` cadence per requirements §3.4.
@@ -204,20 +192,14 @@ export class Game {
       const entry = this.state.moveHistory.pop()!;
       const unit = this.state.getUnitById(entry.unitId);
       if (unit) {
-        unit.setPosition(entry.priorPosition);
-        unit.goneToGround = entry.priorGoneToGround;
-        // Restore dug-in if it was snapshotted (Infantry only). Tank moves
-        // recorded undefined for priorDugIn, so the check is a no-op.
-        if (entry.priorDugIn !== undefined && unit instanceof Infantry) {
-          unit.setDugIn(entry.priorDugIn);
-        }
+        unit.applyMoveSnapshot(entry.snapshot);
         return;
       }
     }
   }
 
   /**
-   * Snap a single unit back to its position at the start of the current Move
+   * Snap a single unit back to its state at the start of the current Move
    * phase, surgically removing all of that unit's entries from `moveHistory`
    * while leaving every other unit's history intact. No-op if the unit has
    * made no moves this phase.
@@ -230,11 +212,7 @@ export class Game {
     const unit = this.requireOwnUnit(unitId);
     const earliest = this.state.moveHistory.find((e) => e.unitId === unitId);
     if (!earliest) return;
-    unit.setPosition(earliest.priorPosition);
-    unit.goneToGround = earliest.priorGoneToGround;
-    if (earliest.priorDugIn !== undefined && unit instanceof Infantry) {
-      unit.setDugIn(earliest.priorDugIn);
-    }
+    unit.applyMoveSnapshot(earliest.snapshot);
     this.state.moveHistory = this.state.moveHistory.filter((e) => e.unitId !== unitId);
   }
 

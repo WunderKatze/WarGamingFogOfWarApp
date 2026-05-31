@@ -1,22 +1,11 @@
-import type { Game } from "../../core/Game.js";
-import type { UnitId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { DiscoveryVisualizerOverlay } from "../canvas/DiscoveryVisualizerOverlay.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
-import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
-
-function getVisibleUnits(game: Game, showAllUnits: boolean): Unit[] {
-  if (showAllUnits) return [...game.state.units];
-  const active = game.state.getActivePlayer();
-  const teamList = game.state.visionState.teamLists.get(active) ?? new Set<UnitId>();
-  return game.state.units.filter(
-    (u) => u.teamId === active || teamList.has(u.id),
-  );
-}
+import { useVisibleUnits } from "../hooks/useVisibleUnits.js";
 
 export function FireDeclareView() {
   const { game, dispatch } = useGameContext();
@@ -27,9 +16,8 @@ export function FireDeclareView() {
     setHoveredTerrainHit,
     setCursorOnMap,
   } = useSelectionContext();
-  const { showAllUnits } = useDebugContext();
   const active = game.state.getActivePlayer();
-  const visible = getVisibleUnits(game, showAllUnits);
+  const visible = useVisibleUnits();
   const fired = game.state.firedThisTurn;
   const { dugInUnitIds, goneToGroundUnitIds } = computeUnitStatusBadges(game);
 

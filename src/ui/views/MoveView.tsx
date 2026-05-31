@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import type { Game } from "../../core/Game.js";
 import type { Point, UnitId, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { DiscoveryVisualizerOverlay } from "../canvas/DiscoveryVisualizerOverlay.js";
@@ -7,20 +6,11 @@ import { MapCanvas } from "../canvas/MapCanvas.js";
 import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
-import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
+import { useVisibleUnits } from "../hooks/useVisibleUnits.js";
 
 const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battalion"];
-
-function getVisibleUnits(game: Game, showAllUnits: boolean): Unit[] {
-  if (showAllUnits) return [...game.state.units];
-  const active = game.state.getActivePlayer();
-  const teamList = game.state.visionState.teamLists.get(active) ?? new Set<UnitId>();
-  return game.state.units.filter(
-    (u) => u.teamId === active || teamList.has(u.id),
-  );
-}
 
 /**
  * Transient state for the live move preview. Not stored in GameState — the
@@ -48,7 +38,6 @@ export function MoveView() {
     setCursorOnMap,
     setPreviewPositionOverride,
   } = useSelectionContext();
-  const { showAllUnits } = useDebugContext();
   const active = game.state.getActivePlayer();
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -67,7 +56,7 @@ export function MoveView() {
   const [penName, setPenName] = useState("");
   const [addPrimed, setAddPrimed] = useState(false);
 
-  const visible = getVisibleUnits(game, showAllUnits);
+  const visible = useVisibleUnits();
   const ownUnits = game.state.units.filter((u) => u.teamId === active);
   const effectiveSelectedId = activeMove?.unitId ?? selectedUnitId;
   const selected = effectiveSelectedId ? game.state.getUnitById(effectiveSelectedId) : undefined;

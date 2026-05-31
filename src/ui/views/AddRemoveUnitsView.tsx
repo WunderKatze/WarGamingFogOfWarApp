@@ -1,14 +1,13 @@
 import { useState } from "react";
-import type { Game } from "../../core/Game.js";
-import type { Point, UnitId, UnitSize, UnitType } from "../../core/types.js";
+import type { Point, UnitSize, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { DiscoveryVisualizerOverlay } from "../canvas/DiscoveryVisualizerOverlay.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
-import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
+import { useVisibleUnits } from "../hooks/useVisibleUnits.js";
 
 const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battalion"];
 
@@ -25,15 +24,6 @@ const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battali
  * turn's vision phase) are rendered on the map for context — vision
  * doesn't run again until endAddRemoveUnits.
  */
-function getVisibleUnits(game: Game, showAllUnits: boolean): Unit[] {
-  if (showAllUnits) return [...game.state.units];
-  const active = game.state.getActivePlayer();
-  const teamList = game.state.visionState.teamLists.get(active) ?? new Set<UnitId>();
-  return game.state.units.filter(
-    (u) => u.teamId === active || teamList.has(u.id),
-  );
-}
-
 export function AddRemoveUnitsView() {
   const { game, dispatch } = useGameContext();
   const {
@@ -43,11 +33,10 @@ export function AddRemoveUnitsView() {
     setHoveredTerrainHit,
     setCursorOnMap,
   } = useSelectionContext();
-  const { showAllUnits } = useDebugContext();
   const activePlayer = game.state.getActivePlayer();
   const { dugInUnitIds, goneToGroundUnitIds } = computeUnitStatusBadges(game);
   const ownUnits = game.state.units.filter((u) => u.teamId === activePlayer);
-  const visible = getVisibleUnits(game, showAllUnits);
+  const visible = useVisibleUnits();
 
   const [penType, setPenType] = useState<UnitType>("Infantry");
   const [penSize, setPenSize] = useState<UnitSize>("Platoon");

@@ -1,16 +1,15 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import type { Point, UnitSize, UnitType } from "../../core/types.js";
-import { Infantry } from "../../core/units/Infantry.js";
+import type { Point } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
+import { UnitPen } from "../components/UnitPen.js";
 import { nextCloneName } from "../components/nextCloneName.js";
 import { useDebugContext } from "../hooks/useDebugContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
-
-const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battalion"];
+import { useUnitPen } from "../hooks/useUnitPen.js";
 
 export function DeploymentView() {
   const { game, dispatch } = useGameContext();
@@ -27,15 +26,13 @@ export function DeploymentView() {
   const ownUnits = game.state.units.filter((u) => u.teamId === activePlayer);
   const visible = showAllUnits ? [...game.state.units] : ownUnits;
 
-  // Pen settings — the kind of unit that will be placed on the next map click.
-  const [penType, setPenType] = useState<UnitType>("Infantry");
-  const [penSize, setPenSize] = useState<UnitSize>("Platoon");
-  const [penRecon, setPenRecon] = useState(false);
-  const [penDugIn, setPenDugIn] = useState(true);
-  // Optional name for the next placement. Empty = auto-generate (`I-3`).
-  // Bumped automatically after each placement while in clone rhythm,
-  // cleared otherwise.
-  const [penName, setPenName] = useState("");
+  // Deployment-phase pen defaults to Infantry, Platoon, no Recon, dug-in.
+  // The dug-in default reflects deployed units starting "settled" per
+  // vision-rules-tweaks §2.3.
+  const pen = useUnitPen({
+    ownUnitCount: ownUnits.length,
+    defaults: { dugIn: true },
+  });
 
   // When set, the next map click moves this unit instead of placing a new
   // one. Cleared on placement, Escape, or selection change to a different
@@ -43,7 +40,7 @@ export function DeploymentView() {
   const [repositionPrimedUnitId, setRepositionPrimedUnitId] = useState<string | undefined>(undefined);
 
   // Set true by the Clone button. While true, normal placements auto-bump
-  // penName to the next available clone-name; any manual edit to a pen
+  // the pen name to the next available clone-name; any manual edit to a pen
   // field breaks rhythm and reverts to normal behavior.
   const [inCloneRhythm, setInCloneRhythm] = useState(false);
 
@@ -52,15 +49,6 @@ export function DeploymentView() {
   const [renameDraft, setRenameDraft] = useState("");
 
   const breakCloneRhythm = () => setInCloneRhythm(false);
-
-  // Pen-field setters that break clone rhythm. Wrapping is preferable to
-  // sprinkling break-calls into each input's onChange — keeps the rhythm
-  // invariant local to one place.
-  const setPenTypeAndBreak = (t: UnitType) => { setPenType(t); breakCloneRhythm(); };
-  const setPenSizeAndBreak = (s: UnitSize) => { setPenSize(s); breakCloneRhythm(); };
-  const setPenReconAndBreak = (v: boolean) => { setPenRecon(v); breakCloneRhythm(); };
-  const setPenDugInAndBreak = (v: boolean) => { setPenDugIn(v); breakCloneRhythm(); };
-  const setPenNameAndBreak = (n: string) => { setPenName(n); breakCloneRhythm(); };
 
   // Selecting a different unit while reposition was primed for the prior
   // one re-primes for the new selection (intuitive: "now I want to move
@@ -86,8 +74,6 @@ export function DeploymentView() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const autoName = (): string => `${penType[0]}-${ownUnits.length + 1}`;
-
   const handlePlace = (position: Point) => {
     if (repositionPrimedUnitId) {
       const targetId = repositionPrimedUnitId;
@@ -95,26 +81,18 @@ export function DeploymentView() {
       setRepositionPrimedUnitId(undefined);
       return;
     }
-    const placedName = penName.trim() === "" ? autoName() : penName.trim();
-    dispatch((g) =>
-      g.deployUnit({
-        type: penType,
-        name: placedName,
-        position,
-        size: penSize,
-        ...(penRecon && { modifiers: ["Recon"] }),
-        ...(penType === "Infantry" && { dugIn: penDugIn }),
-      }),
-    );
+    const params = pen.buildParams(position);
+    dispatch((g) => g.deployUnit(params));
     setSelectedUnitId(undefined);
     if (inCloneRhythm) {
       // Bump for the next click. ownUnits doesn't include the just-placed
-      // unit yet (state hasn't re-rendered), so include placedName
-      // explicitly in the "taken" set.
-      const taken = [...ownUnits.map((u) => u.name), placedName];
-      setPenName(nextCloneName(placedName, taken));
+      // unit yet (state hasn't re-rendered), so include params.name
+      // explicitly in the "taken" set. pen.setters.setName is the raw
+      // setter — it doesn't trigger onFieldChanged, so rhythm stays on.
+      const taken = [...ownUnits.map((u) => u.name), params.name];
+      pen.setters.setName(nextCloneName(params.name, taken));
     } else {
-      setPenName("");
+      pen.clearName();
     }
   };
 
@@ -144,11 +122,8 @@ export function DeploymentView() {
 
   const handleClone = () => {
     if (!selectedOwn) return;
-    setPenType(selectedOwn.type);
-    setPenSize(selectedOwn.size);
-    setPenRecon(selectedOwn.hasModifier("Recon"));
-    setPenDugIn(selectedOwn instanceof Infantry ? selectedOwn.dugIn : true);
-    setPenName(nextCloneName(selectedOwn.name, ownUnits.map((u) => u.name)));
+    pen.loadFromUnit(selectedOwn);
+    pen.setters.setName(nextCloneName(selectedOwn.name, ownUnits.map((u) => u.name)));
     setInCloneRhythm(true);
     setRepositionPrimedUnitId(undefined);
   };
@@ -176,56 +151,7 @@ export function DeploymentView() {
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <Sidebar>
         <SidebarSection title="Pen">
-          <label style={labelStyle}>
-            <span>Name</span>
-            <input
-              type="text"
-              value={penName}
-              onChange={(e) => setPenNameAndBreak(e.target.value)}
-              placeholder="(optional)"
-              style={textInputStyle}
-            />
-          </label>
-          <label style={labelStyle}>
-            <span>Type</span>
-            <select
-              value={penType}
-              onChange={(e) => setPenTypeAndBreak(e.target.value as UnitType)}
-              style={selectStyle}
-            >
-              <option value="Infantry">Infantry</option>
-              <option value="Tank">Tank</option>
-            </select>
-          </label>
-          <label style={labelStyle}>
-            <span>Size</span>
-            <select
-              value={penSize}
-              onChange={(e) => setPenSizeAndBreak(e.target.value as UnitSize)}
-              style={selectStyle}
-            >
-              {UNIT_SIZES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <label style={checkboxLabelStyle}>
-            <input
-              type="checkbox"
-              checked={penRecon}
-              onChange={(e) => setPenReconAndBreak(e.target.checked)}
-            />
-            Recon
-          </label>
-          <label style={{ ...checkboxLabelStyle, opacity: penType === "Infantry" ? 1 : 0.4 }}>
-            <input
-              type="checkbox"
-              checked={penDugIn}
-              disabled={penType !== "Infantry"}
-              onChange={(e) => setPenDugInAndBreak(e.target.checked)}
-            />
-            Dug-in (Infantry only)
-          </label>
+          <UnitPen pen={pen} onFieldChanged={breakCloneRhythm} />
         </SidebarSection>
 
         {selectedOwn && (
@@ -317,47 +243,20 @@ export function DeploymentView() {
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 8,
-  fontSize: 13,
-};
-
-const checkboxLabelStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  marginBottom: 6,
-  fontSize: 13,
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: "2px 6px",
-  fontSize: 13,
-};
-
-const textInputStyle: React.CSSProperties = {
-  padding: "2px 6px",
-  fontSize: 13,
-  width: 120,
-};
-
-const hintStyle: React.CSSProperties = {
+const hintStyle: CSSProperties = {
   fontSize: 12,
   opacity: 0.7,
   margin: 0,
 };
 
-const listStyle: React.CSSProperties = {
+const listStyle: CSSProperties = {
   margin: 0,
   padding: 0,
   listStyle: "none",
   fontSize: 12,
 };
 
-const listItemStyle: React.CSSProperties = {
+const listItemStyle: CSSProperties = {
   padding: "3px 0",
   borderBottom: "1px solid #eee",
   display: "flex",
@@ -366,7 +265,7 @@ const listItemStyle: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
-const listItemMetaStyle: React.CSSProperties = {
+const listItemMetaStyle: CSSProperties = {
   color: "#555",
 };
 

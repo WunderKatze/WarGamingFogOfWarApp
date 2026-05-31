@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
-import type { Point, UnitId, UnitSize, UnitType } from "../../core/types.js";
+import { useEffect, useState, type CSSProperties } from "react";
+import type { Point, UnitId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { DiscoveryVisualizerOverlay } from "../canvas/DiscoveryVisualizerOverlay.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { MovePreviewOverlay } from "../canvas/MovePreviewOverlay.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
+import { UnitPen } from "../components/UnitPen.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
+import { useUnitPen } from "../hooks/useUnitPen.js";
 import { useVisibleUnits } from "../hooks/useVisibleUnits.js";
-
-const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battalion"];
 
 /**
  * Transient state for the live move preview. Not stored in GameState — the
@@ -49,23 +49,17 @@ export function MoveView() {
   // empty click an add, because empty clicks already commit moves /
   // clear selection here — silent over-loading would surprise the
   // player and accidentally spawn units while panning.
-  const [penType, setPenType] = useState<UnitType>("Infantry");
-  const [penSize, setPenSize] = useState<UnitSize>("Platoon");
-  const [penRecon, setPenRecon] = useState(false);
-  const [penDugIn, setPenDugIn] = useState(false);
-  const [penName, setPenName] = useState("");
   const [addPrimed, setAddPrimed] = useState(false);
 
   const visible = useVisibleUnits();
   const ownUnits = game.state.units.filter((u) => u.teamId === active);
+  const pen = useUnitPen({ ownUnitCount: ownUnits.length });
   const effectiveSelectedId = activeMove?.unitId ?? selectedUnitId;
   const selected = effectiveSelectedId ? game.state.getUnitById(effectiveSelectedId) : undefined;
   const selectedOwn = selected && selected.teamId === active ? selected : undefined;
   const canUndo = game.state.moveHistory.length > 0;
   const waypointModeActive = shiftHeld || waypointToggle;
   const { dugInUnitIds, goneToGroundUnitIds } = computeUnitStatusBadges(game);
-
-  const autoName = (): string => `${penType[0]}-${ownUnits.length + 1}`;
 
   const startActiveMove = (unit: Unit) => {
     const origin = unit.getPosition();
@@ -102,18 +96,8 @@ export function MoveView() {
   };
 
   const placeNewUnit = (position: Point) => {
-    const placedName = penName.trim() === "" ? autoName() : penName.trim();
-    dispatch((g) =>
-      g.createUnit({
-        type: penType,
-        name: placedName,
-        position,
-        size: penSize,
-        ...(penRecon && { modifiers: ["Recon"] }),
-        ...(penType === "Infantry" && { dugIn: penDugIn }),
-      }),
-    );
-    setPenName("");
+    dispatch((g) => g.createUnit(pen.buildParams(position)));
+    pen.clearName();
     setAddPrimed(false);
   };
 
@@ -226,56 +210,7 @@ export function MoveView() {
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <Sidebar>
         <SidebarSection title="Add Unit (Pen)">
-          <label style={penLabelStyle}>
-            <span>Name</span>
-            <input
-              type="text"
-              value={penName}
-              onChange={(e) => setPenName(e.target.value)}
-              placeholder="(optional)"
-              style={penTextInputStyle}
-            />
-          </label>
-          <label style={penLabelStyle}>
-            <span>Type</span>
-            <select
-              value={penType}
-              onChange={(e) => setPenType(e.target.value as UnitType)}
-              style={penSelectStyle}
-            >
-              <option value="Infantry">Infantry</option>
-              <option value="Tank">Tank</option>
-            </select>
-          </label>
-          <label style={penLabelStyle}>
-            <span>Size</span>
-            <select
-              value={penSize}
-              onChange={(e) => setPenSize(e.target.value as UnitSize)}
-              style={penSelectStyle}
-            >
-              {UNIT_SIZES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <label style={penCheckboxLabelStyle}>
-            <input
-              type="checkbox"
-              checked={penRecon}
-              onChange={(e) => setPenRecon(e.target.checked)}
-            />
-            Recon
-          </label>
-          <label style={{ ...penCheckboxLabelStyle, opacity: penType === "Infantry" ? 1 : 0.4 }}>
-            <input
-              type="checkbox"
-              checked={penDugIn}
-              disabled={penType !== "Infantry"}
-              onChange={(e) => setPenDugIn(e.target.checked)}
-            />
-            Dug-in (Infantry only)
-          </label>
+          <UnitPen pen={pen} />
           {addPrimed ? (
             <p style={primedHintStyle}>
               Click empty map to place. Esc cancels.
@@ -398,41 +333,14 @@ export function MoveView() {
   );
 }
 
-const listStyle: React.CSSProperties = {
+const listStyle: CSSProperties = {
   margin: 0,
   padding: 0,
   listStyle: "none",
   fontSize: 12,
 };
 
-const penLabelStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 8,
-  fontSize: 13,
-};
-
-const penCheckboxLabelStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  marginBottom: 6,
-  fontSize: 13,
-};
-
-const penSelectStyle: React.CSSProperties = {
-  padding: "2px 6px",
-  fontSize: 13,
-};
-
-const penTextInputStyle: React.CSSProperties = {
-  padding: "2px 6px",
-  fontSize: 13,
-  width: 120,
-};
-
-const primedHintStyle: React.CSSProperties = {
+const primedHintStyle: CSSProperties = {
   background: "#fef3c7",
   border: "1px solid #f59e0b",
   borderRadius: 3,
@@ -442,12 +350,12 @@ const primedHintStyle: React.CSSProperties = {
   color: "#78350f",
 };
 
-const listItemStyle: React.CSSProperties = {
+const listItemStyle: CSSProperties = {
   padding: "3px 0",
   borderBottom: "1px solid #eee",
 };
 
-const waypointToggleStyle: React.CSSProperties = {
+const waypointToggleStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 6,
@@ -456,4 +364,3 @@ const waypointToggleStyle: React.CSSProperties = {
   cursor: "pointer",
   userSelect: "none",
 };
-

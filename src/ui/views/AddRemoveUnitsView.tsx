@@ -1,15 +1,15 @@
-import { useState } from "react";
-import type { Point, UnitSize, UnitType } from "../../core/types.js";
+import type { CSSProperties } from "react";
+import type { Point } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { DiscoveryVisualizerOverlay } from "../canvas/DiscoveryVisualizerOverlay.js";
 import { MapCanvas } from "../canvas/MapCanvas.js";
 import { computeUnitStatusBadges } from "../canvas/unitStatusBadges.js";
 import { Sidebar, SidebarButton, SidebarSection } from "../components/Sidebar.js";
+import { UnitPen } from "../components/UnitPen.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useSelectionContext } from "../hooks/useSelectionContext.js";
+import { useUnitPen } from "../hooks/useUnitPen.js";
 import { useVisibleUnits } from "../hooks/useVisibleUnits.js";
-
-const UNIT_SIZES: readonly UnitSize[] = ["Squad", "Platoon", "Company", "Battalion"];
 
 /**
  * View for the Add/Remove Units phase — see docs/features/v1/mid-game-roster.md §2.3.
@@ -38,28 +38,12 @@ export function AddRemoveUnitsView() {
   const ownUnits = game.state.units.filter((u) => u.teamId === activePlayer);
   const visible = useVisibleUnits();
 
-  const [penType, setPenType] = useState<UnitType>("Infantry");
-  const [penSize, setPenSize] = useState<UnitSize>("Platoon");
-  const [penRecon, setPenRecon] = useState(false);
-  const [penDugIn, setPenDugIn] = useState(false);
-  const [penName, setPenName] = useState("");
-
-  const autoName = (): string => `${penType[0]}-${ownUnits.length + 1}`;
+  const pen = useUnitPen({ ownUnitCount: ownUnits.length });
 
   const handlePlace = (position: Point) => {
-    const placedName = penName.trim() === "" ? autoName() : penName.trim();
-    dispatch((g) =>
-      g.createUnit({
-        type: penType,
-        name: placedName,
-        position,
-        size: penSize,
-        ...(penRecon && { modifiers: ["Recon"] }),
-        ...(penType === "Infantry" && { dugIn: penDugIn }),
-      }),
-    );
+    dispatch((g) => g.createUnit(pen.buildParams(position)));
     setSelectedUnitId(undefined);
-    setPenName("");
+    pen.clearName();
   };
 
   const handleUnitClick = (unit: Unit) => {
@@ -83,56 +67,7 @@ export function AddRemoveUnitsView() {
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <Sidebar>
         <SidebarSection title="Add Unit (Pen)">
-          <label style={labelStyle}>
-            <span>Name</span>
-            <input
-              type="text"
-              value={penName}
-              onChange={(e) => setPenName(e.target.value)}
-              placeholder="(optional)"
-              style={textInputStyle}
-            />
-          </label>
-          <label style={labelStyle}>
-            <span>Type</span>
-            <select
-              value={penType}
-              onChange={(e) => setPenType(e.target.value as UnitType)}
-              style={selectStyle}
-            >
-              <option value="Infantry">Infantry</option>
-              <option value="Tank">Tank</option>
-            </select>
-          </label>
-          <label style={labelStyle}>
-            <span>Size</span>
-            <select
-              value={penSize}
-              onChange={(e) => setPenSize(e.target.value as UnitSize)}
-              style={selectStyle}
-            >
-              {UNIT_SIZES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <label style={checkboxLabelStyle}>
-            <input
-              type="checkbox"
-              checked={penRecon}
-              onChange={(e) => setPenRecon(e.target.checked)}
-            />
-            Recon
-          </label>
-          <label style={{ ...checkboxLabelStyle, opacity: penType === "Infantry" ? 1 : 0.4 }}>
-            <input
-              type="checkbox"
-              checked={penDugIn}
-              disabled={penType !== "Infantry"}
-              onChange={(e) => setPenDugIn(e.target.checked)}
-            />
-            Dug-in (Infantry only)
-          </label>
+          <UnitPen pen={pen} />
         </SidebarSection>
 
         {selectedOwn && (
@@ -190,51 +125,24 @@ export function AddRemoveUnitsView() {
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 8,
-  fontSize: 13,
-};
-
-const checkboxLabelStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  marginBottom: 6,
-  fontSize: 13,
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: "2px 6px",
-  fontSize: 13,
-};
-
-const textInputStyle: React.CSSProperties = {
-  padding: "2px 6px",
-  fontSize: 13,
-  width: 120,
-};
-
-const hintStyle: React.CSSProperties = {
+const hintStyle: CSSProperties = {
   fontSize: 12,
   opacity: 0.7,
   margin: 0,
 };
 
-const listStyle: React.CSSProperties = {
+const listStyle: CSSProperties = {
   margin: 0,
   padding: 0,
   listStyle: "none",
   fontSize: 12,
 };
 
-const listItemStyle: React.CSSProperties = {
+const listItemStyle: CSSProperties = {
   padding: "3px 0",
   borderBottom: "1px solid #eee",
 };
 
-const listItemMetaStyle: React.CSSProperties = {
+const listItemMetaStyle: CSSProperties = {
   color: "#555",
 };

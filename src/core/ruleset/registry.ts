@@ -1,3 +1,4 @@
+import { validateGameFlow } from "../gameflow/index.js";
 import type { Ruleset } from "./Ruleset.js";
 
 /**
@@ -36,6 +37,10 @@ export function registerRuleset(ruleset: Ruleset): void {
         `or unregister the previous bundle first.`,
     );
   }
+  // Validate axis-specific slots at registration time so a malformed
+  // ruleset fails at app boot rather than in mid-game when an action
+  // tries to consult the bad definition.
+  validateGameFlow(ruleset.gameflow);
   rulesets.set(ruleset.id, ruleset);
 }
 

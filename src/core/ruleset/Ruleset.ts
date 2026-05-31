@@ -1,3 +1,5 @@
+import type { GameFlow } from "../gameflow/index.js";
+
 /**
  * A registered wargame ruleset.
  *
@@ -8,12 +10,14 @@
  * registered ruleset under this interface; future rulesets register their
  * own bundles.
  *
- * This interface is **intentionally minimal in step 1a** — only identity
- * and display label. Each Phase B step-1 sub-step adds the slot for its
- * axis (1c gameflow, 1d contributors + terrain catalog, 1e substrate) so
- * each axis's shape is reviewable in isolation rather than as one
- * monolithic interface. See docs/features/v2/mechanics-refactor.md
- * §13.1 for the target shape.
+ * Slots are added per Phase B step-1 sub-step so each axis's shape is
+ * reviewable in isolation rather than as one monolithic interface:
+ *   - 1a — id + displayName (this commit)
+ *   - 1c — gameflow (Axis 1)
+ *   - 1d — contributors + terrain catalog (Axis 2) [pending]
+ *   - 1e — substrate (Axis 3) [pending]
+ *
+ * See docs/features/v2/mechanics-refactor.md §13.1 for the target shape.
  */
 export interface Ruleset {
   /**
@@ -24,4 +28,12 @@ export interface Ruleset {
   readonly id: string;
   /** Human-readable label shown in ruleset pickers and the UI chrome. */
   readonly displayName: string;
+  /**
+   * The ruleset's game-flow definition — phase graph + transitions.
+   * Phase B step 2 migrates Game.ts to drive its state machine from this
+   * definition instead of its hardcoded sequence. Validated against
+   * `validateGameFlow` at registration time so malformed flows fail at
+   * boot, not in mid-game.
+   */
+  readonly gameflow: GameFlow;
 }

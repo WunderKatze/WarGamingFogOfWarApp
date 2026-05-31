@@ -1,11 +1,14 @@
 import type { Ruleset } from "../../../core/ruleset/index.js";
+import { wwiiGameFlow } from "./gameflow.js";
 
 /**
  * The WWII 1/100-scale wargame ruleset — the bundle this codebase was
- * originally built around. Step 1a only defines identity; subsequent
- * Phase B step-1 sub-steps add the axis slots (gameflow, contributors,
- * terrain catalog, substrate) as each axis's interface is laid in
- * engine-core.
+ * originally built around. Slots are filled per Phase B step-1
+ * sub-step as each axis's interface lands in engine-core:
+ *   - 1a — id + displayName
+ *   - 1c — gameflow (Axis 1, this commit)
+ *   - 1d — contributors + terrain catalog (Axis 2) [pending]
+ *   - 1e — substrate (Axis 3) [pending]
  *
  * Registered at app boot in src/main.tsx. Test fixtures that need this
  * bundle register it explicitly per test.
@@ -16,4 +19,5 @@ import type { Ruleset } from "../../../core/ruleset/index.js";
 export const wwiiRuleset: Ruleset = {
   id: "wwii-1-100",
   displayName: "WWII 1/100",
+  gameflow: wwiiGameFlow,
 };

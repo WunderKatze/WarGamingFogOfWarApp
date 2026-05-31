@@ -48,7 +48,13 @@ This refactor is *for the developer maintaining or adapting this codebase*. The 
 
 - **R2 — Modular terrain-vision interactions.** Vision-terrain interactions — edge-grace distance, "block LOS after X inches inside the polygon," "block LOS when a ray crosses ≥2 edges of a polygon," etc. — must be reusable pieces that any terrain catalog entry can attach to. The current catalog pattern is most of the way there; the per-kind interaction code (today inlined in each catalog entry) becomes a small set of **named primitives** that catalog entries reference by name + parameters. Adding a new terrain kind in any ruleset is then assembly, not recoding. Mapped to §6 (Axis 2).
 
-- **R3 — Ruleset-specific code is clearly delineated.** Code that hardcodes turn order, terrain interactions, modifier behavior, or any other 1/100-scale WWII choice must live in files clearly identified as part of the WWII ruleset (e.g. under `src/rulesets/wwii/` or an equivalent convention). Engine-core code must contain no WWII-specific assumptions. This is the architectural principle that makes the whole refactor *visible and verifiable*: a future contributor can browse the engine folder and the WWII folder and see exactly where the line is, without grepping. See §13.1 for the proposed shape and §12 OQ 8 for how to enforce it.
+- **R3 — Ruleset-specific code is clearly delineated (engine *and* UI).** Code that hardcodes WWII-specific choices — whether engine rules (turn order, terrain interactions, modifier behavior) *or* UI surfaces (rule-editor fields specific to WWII concepts, unit-type dropdowns, modifier-specific controls) — must live in files clearly identified as ruleset code. Both **engine-core** (`src/core/`) and **UI-core** (`src/ui/`) must contain no WWII-specific assumptions. This is the architectural principle that makes the whole refactor *visible and verifiable*: a future contributor can browse engine-core, UI-core, and the WWII folder and see exactly where each line lives, without grepping. See §13.1 for the proposed shape and §12 OQ 8 for how to enforce it.
+
+- **R4 — Rule outcomes are computed in engine-core only.** The UI never re-derives a rule outcome — vision math, modifier composition, detection results, valid-move checks, anything the engine would also need to know to be correct. The UI captures user intent (form inputs), renders engine-computed results (badges, panel rows, ring radii), and may reflect rule *structure* for UX purposes (e.g. disabling a "Dug-in" checkbox for non-Infantry units because dug-in is Infantry-only). But it never replicates a rule's *logic* — even partially, even "just for display."
+  
+  The engine must therefore expose a public read API for the intermediate values the UI needs (e.g. `effectiveStealth(unit, position) → { value, breakdown }`, `detectionRange(observer, target) → inches`), not just final outcomes. The exception to R4 is pure display formatting (number rounding, label text, color choice, layout).
+  
+  Recorded in [code-health-pass-ui.md §1.1](code-health-pass-ui.md#11-architectural-principle-rules-logic-lives-in-engine-core), which walks through Dug-in as a worked example of the four legitimate UI ↔ engine interaction patterns and the one that's the actual violation. The B7 finding in that doc is the current hard violation Phase B must close.
 
 ---
 
@@ -60,8 +66,9 @@ This refactor is *for the developer maintaining or adapting this codebase*. The 
 
 1. The current WWII ruleset still plays end-to-end with no observable behavior change. All 195+ tests still pass against the WWII configuration.
 2. A second small **test ruleset** exists in code and is exercised by at least one integration test. It does NOT need to be a fully-realized playable second wargame — it exists to prove the refactor's abstractions are real, not just paper. The minimal proof candidates are debated in §12 OQ 1; a likely shape is "WWII rules but with an alternating-by-phase turn flow" — same units, same vision, different phase sequence.
-3. Adding a new unit type, terrain kind, modifier, or game-flow node doesn't require editing the engine itself — only data + (where needed) a single registration call.
-4. A new contributor can identify, by file location alone, which code is engine-core (reusable across rulesets) and which is WWII-specific. No grep required. See R3 / §13.1.
+3. Adding a new unit type, terrain kind, modifier, or game-flow node doesn't require editing engine-core *or* UI-core — only data + (where needed) a single registration call. The generic UI iterates the ruleset registry and renders accordingly.
+4. A new contributor can identify, by file location alone, which code is engine-core, which is UI-core (both reusable across rulesets), and which is WWII-specific. No grep required. See R3 / §13.1.
+5. No rule outcome is computed UI-side (R4). Every value the UI renders that depends on a game rule comes from a public engine read API — not re-derived in a component or hook.
 
 **Non-goals.** See §9.
 
@@ -290,11 +297,11 @@ The OQs are all answered (§11). Two threads stay open as implementation-time co
 
 ### 13.1 File organization (R3)
 
-The single most important architectural artifact of this refactor is a clear directory split between **engine-core** and **ruleset-specific** code. Concretely (proposed shape — exact names TBD):
+The single most important architectural artifact of this refactor is a clear directory split between **engine-core**, **UI-core**, and **ruleset-specific** code (R3 applies to both engine and UI layers). Concretely (proposed shape — exact names TBD):
 
 ```
 src/
-  core/                ← engine-core: knows nothing about WWII
+  core/                ← engine-core: knows nothing about any ruleset
     ruleset/           ← ruleset interfaces + registry + loader
     gameflow/          ← flow node types: phase / transition / activation / trigger
     vision/
@@ -302,27 +309,52 @@ src/
       primitives/      ← terrain-vision primitives (R2): edge-grace, depth-block, …
     map/
       substrate/       ← map-substrate abstraction (if Axis 3 lands per OQ 5)
+  ui/                  ← UI-core: knows nothing about any ruleset
+    canvas/            ← generic rendering (UnitToken, MapCanvas, overlays)
+    components/        ← generic chrome (Sidebar, GameMenu, UnitPen, RulesEditor shell, …)
+    hooks/             ← generic state plumbing (useGame, useGameContext, useRulesContext)
+    views/             ← generic phase views (rendered per flow node)
+    theme.ts
   rulesets/
-    wwii/              ← everything WWII-specific
-      units/           ← Infantry, Tank
-      modifiers/       ← Recon, dug-in, GtG behaviors as contributors
-      terrain/         ← WWII catalog entries: Building / TallWoods / ShortTerrain / Tall / Short
-      gameflow/        ← Deploy → Move → FireDeclare flow assembled from core flow nodes
-      index.ts         ← assembles the WWII ruleset and registers it
+    wwii/              ← everything WWII-specific (engine + UI)
+      engine/
+        units/         ← Infantry, Tank
+        modifiers/     ← Recon, dug-in, GtG behaviors as contributors
+        terrain/       ← WWII catalog entries: Building / TallWoods / ShortTerrain / Tall / Short
+        gameflow/      ← Deploy → Move → FireDeclare flow assembled from core flow nodes
+        index.ts       ← assembles the WWII engine half and registers it
+      ui/              ← WWII-specific UI components, if any (V2 may not need many — most
+                          UI generalizes via the registry; this folder exists for ruleset-specific
+                          quirks like a bespoke editor for WWII-only knobs)
     test-ruleset/      ← the proof-of-abstraction ruleset (§3 success criterion 2)
 ```
 
-The load-bearing rule is: **engine-core never imports from `src/rulesets/`**. The reverse is fine and expected. Enforcement is by convention (§11 D8) — no lint rule, no CI check; reviewer attention plus a periodic boundary audit (§12) is the front line.
+Two load-bearing import rules:
 
-This is what makes R3 — and the whole refactor — visible and verifiable. A developer adapting the engine to a new wargame copies `src/rulesets/wwii/` as a starting point, edits within their own ruleset folder, and never touches `src/core/`.
+1. **`src/core/*` never imports from `src/rulesets/*` or `src/ui/*`.** Engine-core is the lowest layer; nothing above it leaks down.
+2. **`src/ui/*` never imports from `src/rulesets/*`.** UI-core renders whatever the ruleset registry exposes; it never references WWII-specific names directly. (Importing from `src/core/*` is fine — that's the engine API the UI consumes.)
+
+The reverse (rulesets importing from core / ui) is fine and expected. Enforcement is by convention (§11 D8) — no lint rule, no CI check; reviewer attention plus a periodic boundary audit (§12) is the front line.
+
+This is what makes R3 — and the whole refactor — visible and verifiable. A developer adapting the engine to a new wargame copies `src/rulesets/wwii/` (both `engine/` and `ui/`) as a starting point, edits within their own ruleset folder, and never touches `src/core/` or `src/ui/`.
 
 ### 13.2 Files most affected
+
+**Engine-core:**
 - [src/core/Game.ts](../../../src/core/Game.ts) — state machine, becomes assembled from gameflow blocks.
 - [src/core/GameState.ts](../../../src/core/GameState.ts) — phase enum gets superseded.
-- [src/core/VisionCalculator.ts](../../../src/core/VisionCalculator.ts) — `discover()` becomes "run contributor pipeline + apply §4 formula."
+- [src/core/VisionCalculator.ts](../../../src/core/VisionCalculator.ts) — `discover()` becomes "run contributor pipeline + apply §4 formula." Also exposes new read API (per R4): `effectiveStealth`, `detectionRange`, contributor breakdown.
 - [src/core/rules.ts](../../../src/core/rules.ts) — rule-set loader entry point.
-- [src/core/units/Unit.ts](../../../src/core/units/Unit.ts) — `getVision()` / `getIntrinsicStealth()` stay; concrete subclasses (`Infantry`, `Tank`) move to `src/rulesets/wwii/units/`.
-- [src/core/map/terrainCatalog.ts](../../../src/core/map/terrainCatalog.ts) — splits three ways: the catalog *shape* (interfaces) stays in `src/core/`, the WWII entries move to `src/rulesets/wwii/terrain/`, and the vision-interaction geometry extracts to `src/core/vision/primitives/` (R2).
+- [src/core/units/Unit.ts](../../../src/core/units/Unit.ts) — `getVision()` / `getIntrinsicStealth()` stay; concrete subclasses (`Infantry`, `Tank`) move to `src/rulesets/wwii/engine/units/`.
+- [src/core/map/terrainCatalog.ts](../../../src/core/map/terrainCatalog.ts) — splits three ways: the catalog *shape* (interfaces) stays in `src/core/`, the WWII entries move to `src/rulesets/wwii/engine/terrain/`, and the vision-interaction geometry stays in `src/core/vision/primitives/` (already extracted by A3).
+
+**UI:**
+- [src/ui/canvas/effectiveStealth.ts](../../../src/ui/canvas/effectiveStealth.ts) — deletes; UI consumes the engine's new `effectiveStealth` read API (R4 / B7 fix).
+- [src/ui/canvas/discoveryRings.ts](../../../src/ui/canvas/discoveryRings.ts) — composition logic removed; reads `effectiveStealth` and `detectionRange` from the engine.
+- [src/ui/components/InfoMenu.tsx](../../../src/ui/components/InfoMenu.tsx) — stealth-breakdown composition removed; renders the engine-returned breakdown.
+- [src/ui/components/RulesEditor.tsx](../../../src/ui/components/RulesEditor.tsx) — generic shell stays in `src/ui/components/`; WWII-named fields (Infantry/Tank/Recon/Building/…) become iterations over the registered ruleset, or the WWII ruleset provides a custom editor under `src/rulesets/wwii/ui/`.
+- [src/ui/components/UnitPen.tsx](../../../src/ui/components/UnitPen.tsx) — to be created by Phase A-2 U2; iterates registered unit types and modifiers from the active ruleset rather than hardcoding Infantry/Tank/Recon/Dug-in.
+- [src/ui/views/*.tsx](../../../src/ui/views/) — phase enum references replaced by flow-node references; otherwise mostly unchanged.
 
 ### 13.3 Tests
 - All existing tests pass unchanged against the WWII ruleset.
@@ -345,7 +377,8 @@ This is what makes R3 — and the whole refactor — visible and verifiable. A d
 | **Substrate** (map substrate) | The map's coordinate system. Currently free-position inches; future candidates are square grid and hex grid. Defines position, distance, and ray-traversal — the three primitives the §4 vision formula sits on top of. |
 | **Flow node** (game-flow node) | One of the four sub-types that compose a game flow: a **phase** (state — deploy, move, fire), a **transition** (edge — how one phase ends and what comes next), an **activation model** (property of a phase — whose turn / how many units), or an **end-of-trigger handler** (event — vision recompute, GtG reset, etc.). A game flow is a graph of these for a specific ruleset. |
 | **Activation model** | The rule for whose turn it is at any given phase: whole-team, single-unit-per-activation, alternating-units, initiative-driven, etc. One of the four flow-node sub-types. |
-| **Ruleset** | A bundle of game-specific code — units, contributors, catalogs, game-flow assembly — that registers itself with the engine. WWII is one ruleset; the test ruleset is another. Lives under `src/rulesets/`. |
-| **Engine-core** | Code that knows nothing about any specific ruleset. Defines interfaces, flow nodes, primitives, substrate, contributors, the vision formula, and the registry. Lives under `src/core/`. Never imports from `src/rulesets/`. |
+| **Ruleset** | A bundle of game-specific code — units, contributors, catalogs, game-flow assembly, *and any ruleset-specific UI* — that registers itself with the engine. WWII is one ruleset; the test ruleset is another. Lives under `src/rulesets/<name>/`, split into `engine/` and `ui/` subfolders. |
+| **Engine-core** | Code that knows nothing about any specific ruleset. Defines interfaces, flow nodes, primitives, substrate, contributors, the vision formula, and the registry. Lives under `src/core/`. Never imports from `src/rulesets/` or `src/ui/`. |
+| **UI-core** | Generic React + Konva surfaces that render whatever the active ruleset registers. Sidebar, MapCanvas, UnitToken, generic phase views, hook plumbing, theme — none of it references WWII concepts by name. Lives under `src/ui/`. Never imports from `src/rulesets/`. |
 
 When a term gets a final name during implementation, update its row here and grep the rest of the doc to replace the placeholder.

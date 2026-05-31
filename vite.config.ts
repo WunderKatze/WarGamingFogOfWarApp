@@ -6,5 +6,9 @@ export default defineConfig({
   test: {
     globals: true,
     include: ["tests/**/*.test.ts"],
+    // happy-dom gives renderHook + React Testing Library a DOM to mount in.
+    // Light enough that running every test in this environment is cheaper
+    // than maintaining per-file environment annotations.
+    environment: "happy-dom",
   },
 });

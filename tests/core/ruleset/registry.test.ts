@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { GameFlow } from "../../../src/core/gameflow/index.js";
+import { singleHighest, type VisionConfig } from "../../../src/core/vision/index.js";
 import {
   clearRulesets,
   getRuleset,
@@ -11,10 +12,11 @@ import {
 /**
  * Tests for the Ruleset registry (src/core/ruleset/registry.ts).
  *
- * Phase B step 1a establishes the spine; step 1c added validation of
- * each registered ruleset's gameflow at registration time. The minimal
- * flow used here is just enough to satisfy the validator — it doesn't
- * model real game behavior; that's what wwiiGameFlow.test.ts exercises.
+ * Phase B step 1a establishes the spine; step 1c added gameflow
+ * validation at registration time; step 1d adds the vision slot.
+ * The minimal axis values used here are just enough to satisfy the
+ * required-fields shape — they don't model real game behavior; that's
+ * what the per-axis ruleset tests exercise.
  */
 
 const minimalFlow: GameFlow = {
@@ -23,8 +25,23 @@ const minimalFlow: GameFlow = {
   transitions: [],
 };
 
-const sampleA: Ruleset = { id: "alpha", displayName: "Alpha", gameflow: minimalFlow };
-const sampleB: Ruleset = { id: "beta", displayName: "Beta", gameflow: minimalFlow };
+const minimalVision: VisionConfig = {
+  contributors: [],
+  compositionRule: singleHighest,
+};
+
+const sampleA: Ruleset = {
+  id: "alpha",
+  displayName: "Alpha",
+  gameflow: minimalFlow,
+  vision: minimalVision,
+};
+const sampleB: Ruleset = {
+  id: "beta",
+  displayName: "Beta",
+  gameflow: minimalFlow,
+  vision: minimalVision,
+};
 
 afterEach(() => {
   clearRulesets();
@@ -57,7 +74,12 @@ describe("ruleset registry", () => {
 
   it("rejects a different bundle re-registered with the same id", () => {
     registerRuleset(sampleA);
-    const conflicting: Ruleset = { id: "alpha", displayName: "Alpha conflict", gameflow: minimalFlow };
+    const conflicting: Ruleset = {
+      id: "alpha",
+      displayName: "Alpha conflict",
+      gameflow: minimalFlow,
+      vision: minimalVision,
+    };
     expect(() => registerRuleset(conflicting)).toThrow(
       /Ruleset already registered with id "alpha"/,
     );
@@ -91,6 +113,7 @@ describe("ruleset registry", () => {
         phases: [{ id: "real", displayName: "Real", activationModel: { kind: "whole-team" } }],
         transitions: [],
       },
+      vision: minimalVision,
     };
     expect(() => registerRuleset(broken)).toThrow(/initialPhaseId "missing"/);
     expect(getRuleset("broken")).toBeUndefined();

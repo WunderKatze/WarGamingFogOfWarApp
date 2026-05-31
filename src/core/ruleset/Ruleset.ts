@@ -1,4 +1,5 @@
 import type { GameFlow } from "../gameflow/index.js";
+import type { VisionConfig } from "../vision/index.js";
 
 /**
  * A registered wargame ruleset.
@@ -12,9 +13,9 @@ import type { GameFlow } from "../gameflow/index.js";
  *
  * Slots are added per Phase B step-1 sub-step so each axis's shape is
  * reviewable in isolation rather than as one monolithic interface:
- *   - 1a — id + displayName (this commit)
+ *   - 1a — id + displayName
  *   - 1c — gameflow (Axis 1)
- *   - 1d — contributors + terrain catalog (Axis 2) [pending]
+ *   - 1d — vision (Axis 2: contributors + composition rule, this commit)
  *   - 1e — substrate (Axis 3) [pending]
  *
  * See docs/features/v2/mechanics-refactor.md §13.1 for the target shape.
@@ -36,4 +37,11 @@ export interface Ruleset {
    * boot, not in mid-game.
    */
   readonly gameflow: GameFlow;
+  /**
+   * The ruleset's vision pipeline: ordered contributors + the
+   * composition rule that pools them into effective_stealth for the §4
+   * formula. Phase B step 2 migrates VisionCalculator.discover and the
+   * new R4 read API to drive their math from this config.
+   */
+  readonly vision: VisionConfig;
 }

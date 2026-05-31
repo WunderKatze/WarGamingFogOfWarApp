@@ -1,4 +1,5 @@
 import type { GameFlow } from "../gameflow/index.js";
+import type { Substrate } from "../map/substrate/index.js";
 import type { VisionConfig } from "../vision/index.js";
 
 /**
@@ -15,8 +16,8 @@ import type { VisionConfig } from "../vision/index.js";
  * reviewable in isolation rather than as one monolithic interface:
  *   - 1a — id + displayName
  *   - 1c — gameflow (Axis 1)
- *   - 1d — vision (Axis 2: contributors + composition rule, this commit)
- *   - 1e — substrate (Axis 3) [pending]
+ *   - 1d — vision (Axis 2: contributors + composition rule)
+ *   - 1e — substrate (Axis 3: distance seam, this commit)
  *
  * See docs/features/v2/mechanics-refactor.md §13.1 for the target shape.
  */
@@ -44,4 +45,11 @@ export interface Ruleset {
    * new R4 read API to drive their math from this config.
    */
   readonly vision: VisionConfig;
+  /**
+   * The substrate this ruleset is played on. V2 ships only the seam —
+   * every ruleset provides one and engine-core reads `distance(a, b)`
+   * through it. Hex / square-grid substrate implementations are V3+
+   * work (see Substrate doc and §11 D5).
+   */
+  readonly substrate: Substrate;
 }

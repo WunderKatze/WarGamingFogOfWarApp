@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { GameFlow } from "../../../src/core/gameflow/index.js";
+import type { Substrate } from "../../../src/core/map/substrate/index.js";
 import { singleHighest, type VisionConfig } from "../../../src/core/vision/index.js";
 import {
   clearRulesets,
@@ -12,9 +13,9 @@ import {
 /**
  * Tests for the Ruleset registry (src/core/ruleset/registry.ts).
  *
- * Phase B step 1a establishes the spine; step 1c added gameflow
- * validation at registration time; step 1d adds the vision slot.
- * The minimal axis values used here are just enough to satisfy the
+ * Phase B step 1a establishes the spine; subsequent sub-steps add
+ * required axis slots (1c gameflow, 1d vision, 1e substrate). The
+ * minimal axis values used here are just enough to satisfy the
  * required-fields shape — they don't model real game behavior; that's
  * what the per-axis ruleset tests exercise.
  */
@@ -30,17 +31,25 @@ const minimalVision: VisionConfig = {
   compositionRule: singleHighest,
 };
 
+const minimalSubstrate: Substrate = {
+  id: "test-substrate",
+  displayName: "Test",
+  distance: () => 0,
+};
+
 const sampleA: Ruleset = {
   id: "alpha",
   displayName: "Alpha",
   gameflow: minimalFlow,
   vision: minimalVision,
+  substrate: minimalSubstrate,
 };
 const sampleB: Ruleset = {
   id: "beta",
   displayName: "Beta",
   gameflow: minimalFlow,
   vision: minimalVision,
+  substrate: minimalSubstrate,
 };
 
 afterEach(() => {
@@ -79,6 +88,7 @@ describe("ruleset registry", () => {
       displayName: "Alpha conflict",
       gameflow: minimalFlow,
       vision: minimalVision,
+      substrate: minimalSubstrate,
     };
     expect(() => registerRuleset(conflicting)).toThrow(
       /Ruleset already registered with id "alpha"/,
@@ -114,6 +124,7 @@ describe("ruleset registry", () => {
         transitions: [],
       },
       vision: minimalVision,
+      substrate: minimalSubstrate,
     };
     expect(() => registerRuleset(broken)).toThrow(/initialPhaseId "missing"/);
     expect(getRuleset("broken")).toBeUndefined();

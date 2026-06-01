@@ -1,21 +1,35 @@
-import { singleHighest, type VisionConfig } from "../../../core/vision/index.js";
+import type { VisionConfig } from "../../../core/vision/index.js";
+import { wwiiComposition } from "./vision/composition.js";
+import {
+  goneToGroundContributor,
+  inherentContributor,
+  intrinsicContributor,
+  terrainContributor,
+} from "./vision/contributors/index.js";
 
 /**
  * The WWII 1/100 ruleset's vision-pipeline configuration.
  *
- * Step 1d wires the slot with the composition rule WWII uses
- * (single-highest pooling) but with an empty contributor list. The
- * actual contributors (intrinsic stealth, dug-in inherent, polygon
- * terrain, walls, GtG stacking) are extracted from VisionCalculator
- * and registered here in step 2. Until then, the registered config is
- * structurally complete but inert — nothing reads it; VisionCalculator
- * continues to compose contributors inline as it does today.
+ * Phase B 2b-i: contributors and composition are now real. Order is
+ * intentional and matches the composition rule's expectations —
+ * intrinsic first so it appears first in breakdowns; gone-to-ground
+ * last so it visually stacks "on top" of any pool winner. (Strictly
+ * speaking the WWII composition rule routes by `contributorId`, not
+ * by position, so order doesn't affect correctness. It does affect
+ * the per-contributor `contribute()` call order, which is irrelevant
+ * for these contributors since none of them depend on each other's
+ * state.)
  *
- * Phase B over-abstraction note: composition is `singleHighest` for
- * WWII; that's locked-in for this ruleset. Other rulesets register
- * `sum` / `product` / their own combiner.
+ * VisionCalculator.discover doesn't read this config yet — 2b-ii
+ * wires the consumption. Until then, the pipeline exists as parallel
+ * data the VisionCalculator could opt into.
  */
 export const wwiiVisionConfig: VisionConfig = {
-  contributors: [],
-  compositionRule: singleHighest,
+  contributors: [
+    intrinsicContributor,
+    inherentContributor,
+    terrainContributor,
+    goneToGroundContributor,
+  ],
+  compositionRule: wwiiComposition,
 };

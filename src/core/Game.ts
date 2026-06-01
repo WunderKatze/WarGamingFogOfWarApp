@@ -39,7 +39,11 @@ export class Game {
   constructor(init: GameStateInit) {
     this.state = new GameState(init);
     this.ruleset = init.ruleset;
-    this.visionCalculator = new VisionCalculator(init.map, init.ruleset.vision);
+    this.visionCalculator = new VisionCalculator(
+      init.map,
+      init.ruleset.vision,
+      init.ruleset.substrate,
+    );
   }
 
   /**

@@ -11,6 +11,7 @@ import { TerrainPolygon } from "../../../src/core/map/TerrainPolygon.js";
 import { Infantry } from "../../../src/core/units/Infantry.js";
 import { Tank } from "../../../src/core/units/Tank.js";
 import { VisionCalculator } from "../../../src/core/VisionCalculator.js";
+import { freePositionInches } from "../../../src/rulesets/wwii/engine/substrate.js";
 import { wwiiVisionConfig } from "../../../src/rulesets/wwii/engine/vision.js";
 import {
   abstractDivisorRings,
@@ -32,7 +33,7 @@ const emptyMap = () => new GameMap({ width: 1000, height: 1000 });
  * of map + rules. This helper keeps test fixtures concise.
  */
 const makeVC = (map: GameMap = emptyMap()) =>
-  new VisionCalculator(map, wwiiVisionConfig);
+  new VisionCalculator(map, wwiiVisionConfig, freePositionInches);
 
 describe("availablePostureModifiers", () => {
   it("always includes Open (×1) as the first entry", () => {

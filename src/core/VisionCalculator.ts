@@ -1,5 +1,5 @@
 import { GameMap } from "./map/GameMap.js";
-import { distance } from "./map/geometry.js";
+import type { Substrate } from "./map/substrate/index.js";
 import { Unit } from "./units/Unit.js";
 import type { Point, TeamId, UnitId } from "./types.js";
 import type {
@@ -13,6 +13,7 @@ export class VisionCalculator {
   constructor(
     public readonly gameMap: GameMap,
     public readonly visionConfig: VisionConfig,
+    public readonly substrate: Substrate,
   ) {}
 
   /**
@@ -41,7 +42,7 @@ export class VisionCalculator {
    */
   discover(observer: Unit, target: Unit): boolean {
     if (!this.see(observer, target)) return false;
-    return distance(observer.getPosition(), target.getPosition())
+    return this.substrate.distance(observer.getPosition(), target.getPosition())
       <= this.detectionRange(observer, target);
   }
 

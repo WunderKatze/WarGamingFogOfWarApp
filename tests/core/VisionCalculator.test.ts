@@ -16,6 +16,7 @@ import { Tank } from "../../src/core/units/Tank.js";
 import type { Point, TeamId, UnitId } from "../../src/core/types.js";
 import { VisionCalculator } from "../../src/core/VisionCalculator.js";
 import { createEmptyVisionState, type VisionState } from "../../src/core/VisionState.js";
+import { freePositionInches } from "../../src/rulesets/wwii/engine/substrate.js";
 import { wwiiVisionConfig } from "../../src/rulesets/wwii/engine/vision.js";
 
 afterEach(() => {
@@ -29,7 +30,8 @@ const p = (x: number, y: number): Point => ({ x, y });
  * 2b-ii made the visionConfig a constructor arg; this helper keeps
  * the test fixtures concise — every test uses the WWII bundle.
  */
-const makeVC = (map: GameMap): VisionCalculator => new VisionCalculator(map, wwiiVisionConfig);
+const makeVC = (map: GameMap): VisionCalculator =>
+  new VisionCalculator(map, wwiiVisionConfig, freePositionInches);
 
 const tankAt = (id: string, pos: Point, teamId = "A") =>
   new Tank({ id, name: id, teamId, position: pos });

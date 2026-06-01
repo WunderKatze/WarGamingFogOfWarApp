@@ -138,8 +138,21 @@ describe("terrainContributor", () => {
     ]);
   });
 
-  it("returns empty when no observer is given (ray-direction-sensitive contributor needs one)", () => {
-    const readings = terrainContributor.contribute(makeTank(), { x: 999, y: 50 }, woodsMap(), undefined);
+  it("position-only mode (no observer): polygons containing the position contribute", () => {
+    // Inside the woods strip (x=200..800, y=0..100).
+    const readings = terrainContributor.contribute(makeTank(), { x: 500, y: 50 }, woodsMap(), undefined);
+    expect(readings).toEqual([
+      { contributorId: "terrain", modifier: 3, label: "Tall Woods" },
+    ]);
+  });
+
+  it("position-only mode: position outside any polygon → empty", () => {
+    const readings = terrainContributor.contribute(makeTank(), { x: 100, y: 50 }, woodsMap(), undefined);
+    expect(readings).toEqual([]);
+  });
+
+  it("position-only mode: walls drop out (they have no meaning without a ray)", () => {
+    const readings = terrainContributor.contribute(makeTank(), { x: 50, y: 50 }, shortWallMap(), undefined);
     expect(readings).toEqual([]);
   });
 });

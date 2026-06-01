@@ -1,8 +1,12 @@
 import { GameMap } from "./map/GameMap.js";
 import { distance } from "./map/geometry.js";
 import { Unit } from "./units/Unit.js";
-import type { TeamId, UnitId } from "./types.js";
-import type { VisionConfig } from "./vision/index.js";
+import type { Point, TeamId, UnitId } from "./types.js";
+import type {
+  CompositionResult,
+  ContributorReading,
+  VisionConfig,
+} from "./vision/index.js";
 import type { VisionState } from "./VisionState.js";
 
 export class VisionCalculator {
@@ -37,32 +41,52 @@ export class VisionCalculator {
    */
   discover(observer: Unit, target: Unit): boolean {
     if (!this.see(observer, target)) return false;
-
-    const observerPos = observer.getPosition();
-    const targetPos = target.getPosition();
-
-    const effectiveStealth = this.computeEffectiveStealth(target, targetPos, observer);
-    const visionRange = observer.getVision() / effectiveStealth;
-
-    return distance(observerPos, targetPos) <= visionRange;
+    return distance(observer.getPosition(), target.getPosition())
+      <= this.detectionRange(observer, target);
   }
 
   /**
-   * Run the ruleset's vision pipeline for one observation and return
-   * the composed effective_stealth value. Exposed as a private helper
-   * for now; Phase B step 2 (R4 read API) promotes a public variant
-   * that also returns the per-source breakdown so the UI can render
-   * "× 3 Tall Woods × 2 GtG" without re-deriving the math.
+   * Effective stealth at a position — the R4 public read API.
+   *
+   * Runs the ruleset's vision pipeline for one observation and
+   * returns the composed result: the pooled multiplier plus the
+   * per-source breakdown the UI can render directly ("intrinsic ×
+   * 4/3, Tall Woods × 3, GtG × 2") without re-deriving any of the
+   * math. Closes the B7 finding in code-health-pass-ui.md.
+   *
+   * Two modes:
+   *   - **With observer** (the discover path): contributors that
+   *     depend on the observer (e.g. WWII's terrain in ray-based
+   *     mode) get a real observer to reason from.
+   *   - **Without observer** (UI's "what's this unit's stealth at
+   *     this point?" calls): observer-dependent contributors fall
+   *     back to position-only behavior (WWII terrain returns
+   *     polygons-containing-the-point; walls drop out because they
+   *     have no meaning without a ray).
    */
-  private computeEffectiveStealth(
+  effectiveStealth(
     target: Unit,
-    position: { x: number; y: number },
-    observer: Unit | undefined,
-  ): number {
-    const readings = this.visionConfig.contributors.flatMap((c) =>
+    position: Point,
+    observer?: Unit,
+  ): CompositionResult {
+    const readings: ContributorReading[] = this.visionConfig.contributors.flatMap((c) =>
       c.contribute(target, position, this.gameMap, observer),
     );
-    return this.visionConfig.compositionRule(readings).value;
+    return this.visionConfig.compositionRule(readings);
+  }
+
+  /**
+   * Detection range — the R4 public read API for "from how far can
+   * this observer detect this target?" Computes the §4 threshold
+   * `observer.vision / target.effective_stealth` using the
+   * observer's view of the target at the target's current position.
+   * Callers asking about a hypothetical target position should use
+   * `effectiveStealth(target, hypotheticalPosition, observer)` and
+   * divide observer.getVision() themselves.
+   */
+  detectionRange(observer: Unit, target: Unit): number {
+    const effective = this.effectiveStealth(target, target.getPosition(), observer);
+    return observer.getVision() / effective.value;
   }
 
   /**

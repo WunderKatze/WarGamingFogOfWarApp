@@ -10,6 +10,8 @@ import { GameMap } from "../../../src/core/map/GameMap.js";
 import { TerrainPolygon } from "../../../src/core/map/TerrainPolygon.js";
 import { Infantry } from "../../../src/core/units/Infantry.js";
 import { Tank } from "../../../src/core/units/Tank.js";
+import { VisionCalculator } from "../../../src/core/VisionCalculator.js";
+import { wwiiVisionConfig } from "../../../src/rulesets/wwii/engine/vision.js";
 import {
   abstractDivisorRings,
   availableArchetypes,
@@ -24,6 +26,13 @@ const tankAt = (id: string, pos = p(0, 0), teamId = "A") =>
   new Tank({ id, name: id, teamId, position: pos });
 
 const emptyMap = () => new GameMap({ width: 1000, height: 1000 });
+
+/**
+ * Phase B 2b-iii: ringsForUnit now takes a VisionCalculator instead
+ * of map + rules. This helper keeps test fixtures concise.
+ */
+const makeVC = (map: GameMap = emptyMap()) =>
+  new VisionCalculator(map, wwiiVisionConfig);
 
 describe("availablePostureModifiers", () => {
   it("always includes Open (×1) as the first entry", () => {
@@ -111,7 +120,7 @@ describe("ringsForUnit", () => {
     const observer = tankAt("o");
     const tank = availableArchetypes().find((a) => a.unitType === "Tank" && !a.recon)!;
     const lens = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 1, false)!;
-    const rings = ringsForUnit(observer, p(0, 0), emptyMap(), lens);
+    const rings = ringsForUnit(observer, p(0, 0), makeVC(), lens);
     const outgoing = rings.find((r) => r.direction === "outgoing")!;
     expect(outgoing.radiusInches).toBeCloseTo(observer.getVision() / tank.intrinsicStealth, 10);
   });
@@ -121,7 +130,7 @@ describe("ringsForUnit", () => {
       id: "i", name: "i", teamId: "A", position: p(0, 0), dugIn: true,
     });
     const lens = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 1, false)!;
-    const rings = ringsForUnit(dugIn, p(0, 0), emptyMap(), lens);
+    const rings = ringsForUnit(dugIn, p(0, 0), makeVC(), lens);
     const incoming = rings.find((r) => r.direction === "incoming")!;
     expect(incoming.radiusInches).toBeCloseTo(
       unitTypeStats.Tank.baseVision /
@@ -133,13 +142,13 @@ describe("ringsForUnit", () => {
   it("outgoing GtG stacks when posture modifier > 1, does not when Open", () => {
     const obs = tankAt("o");
     const lensOpenGtg = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 1, true)!;
-    const outOpen = ringsForUnit(obs, p(0, 0), emptyMap(), lensOpenGtg)
+    const outOpen = ringsForUnit(obs, p(0, 0), makeVC(), lensOpenGtg)
       .find((r) => r.direction === "outgoing")!;
     // Open + GtG: stealth = 1 → range = full vision
     expect(outOpen.radiusInches).toBeCloseTo(obs.getVision(), 10);
 
     const lensCoverGtg = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 2, true)!;
-    const outCover = ringsForUnit(obs, p(0, 0), emptyMap(), lensCoverGtg)
+    const outCover = ringsForUnit(obs, p(0, 0), makeVC(), lensCoverGtg)
       .find((r) => r.direction === "outgoing")!;
     // ×2 cover + GtG (×2): threat stealth = 1 × 2 × 2 = 4
     expect(outCover.radiusInches).toBeCloseTo(obs.getVision() / 4, 10);
@@ -156,7 +165,7 @@ describe("ringsForUnit", () => {
     obs.goneToGround = true;
 
     const lens = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 1, false)!;
-    const incoming = ringsForUnit(obs, p(0, 0), map, lens)
+    const incoming = ringsForUnit(obs, p(0, 0), makeVC(map), lens)
       .find((r) => r.direction === "incoming")!;
     expect(incoming.radiusInches).toBeCloseTo(
       unitTypeStats.Tank.baseVision /
@@ -167,7 +176,7 @@ describe("ringsForUnit", () => {
 
   it("returns exactly one incoming and one outgoing ring", () => {
     const lens = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 1, false)!;
-    const rings = ringsForUnit(tankAt("o"), p(0, 0), emptyMap(), lens);
+    const rings = ringsForUnit(tankAt("o"), p(0, 0), makeVC(), lens);
     expect(rings.filter((r) => r.direction === "incoming")).toHaveLength(1);
     expect(rings.filter((r) => r.direction === "outgoing")).toHaveLength(1);
   });
@@ -177,7 +186,7 @@ describe("ringsForUnit", () => {
     const dugIn = new Infantry({ id: "i", name: "i", teamId: "A", position: p(0, 0), dugIn: true });
     const lens = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 1, false)!;
     const previewRings = ringsForUnit(
-      dugIn, p(0, 0), emptyMap(), lens, undefined, { treatAsJustMoved: true },
+      dugIn, p(0, 0), makeVC(), lens, { treatAsJustMoved: true },
     );
     const incoming = previewRings.find((r) => r.direction === "incoming")!;
     // No dug-in → effective stealth is just Infantry intrinsic.
@@ -199,7 +208,7 @@ describe("ringsForUnit", () => {
 
     const lens = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 1, false)!;
     const previewIncoming = ringsForUnit(
-      obs, p(0, 0), map, lens, undefined, { treatAsJustMoved: true },
+      obs, p(0, 0), makeVC(map), lens, { treatAsJustMoved: true },
     ).find((r) => r.direction === "incoming")!;
     // GtG dropped on preview → stealth = Tank intrinsic × ShortTerrain (no GtG stack)
     expect(previewIncoming.radiusInches).toBeCloseTo(
@@ -220,7 +229,7 @@ describe("ringsForUnit", () => {
 
     const lens = resolveLens({ kind: "unit", unitType: "Tank", recon: false }, 1, false)!;
     const previewIncoming = ringsForUnit(
-      obs, p(0, 0), map, lens, undefined, { treatAsJustMoved: true },
+      obs, p(0, 0), makeVC(map), lens, { treatAsJustMoved: true },
     ).find((r) => r.direction === "incoming")!;
     // Recon keeps GtG → stealth = intrinsic × ShortTerrain × GtG
     expect(previewIncoming.radiusInches).toBeCloseTo(

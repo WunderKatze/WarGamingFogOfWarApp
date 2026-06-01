@@ -9,7 +9,6 @@ import { getRules } from "../../core/rules.js";
 import type { Point, TeamId } from "../../core/types.js";
 import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
-import { getStealthAtPosition } from "../canvas/effectiveStealth.js";
 import { buildSidc } from "../canvas/sidc.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useMapEditorContext } from "../hooks/useMapEditorContext.js";
@@ -108,27 +107,24 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
     ? revealed ? "Revealed" : "Not revealed"
     : revealed ? "Revealed" : "Detected";
 
-  const positionStealth = getStealthAtPosition(unit, position, game.state.map);
-  // GtG only stacks during *concealed* discovery checks — see
-  // vision-rules-tweaks §2.3. At this position, "concealed" means the
-  // highest applicable stealth modifier (terrain + inherent) is >1. The
-  // unit can be gone-to-ground without that being true (e.g. a GtG tank
-  // in the open). Reflect that in the display: badge says "is GtG",
-  // stealth line only shows the stacked product when concealment makes
-  // it real.
-  const isConcealedHere = positionStealth.value > 1;
+  // Engine read API (R4): the vision pipeline computes the value and
+  // the per-source breakdown; the UI just renders. No re-derivation
+  // of intrinsic × pool × gtg here — that's all engine-side.
+  const stealthResult = game.visionCalculator.effectiveStealth(unit, position);
+  const totalStealth = stealthResult.value;
+  // Build "×A intrinsic × ×B Tall Woods × ×C GtG" from the engine's
+  // breakdown. Each entry's label is whatever the contributing
+  // contributor declared.
+  const factors = stealthResult.breakdown.map(
+    (reading) => `×${formatMultiplier(reading.modifier)} ${reading.label}`,
+  );
+  // GtG informational row (the "Gone to Ground · ×N stealth if concealed
+  // by terrain" line below) shows whenever the unit is GtG, regardless
+  // of whether it's stacking right now. This is a player-affordance
+  // separate from the stealth math — kept reading getRules() directly
+  // for the displayed multiplier rather than going through the engine.
   const isGtg = game.isGoneToGround(unit);
-  const gtgApplies = isGtg && isConcealedHere;
   const gtgMultiplier = getRules().goneToGroundStealthModifier;
-  const intrinsicStealth = unit.getIntrinsicStealth();
-  const totalStealth = intrinsicStealth * positionStealth.value * (gtgApplies ? gtgMultiplier : 1);
-  // Build a compact "×A × ×B × ×C" breakdown of all contributing factors,
-  // omitting ×1 factors. Shown alongside the combined total when there's
-  // more than one contributing factor.
-  const factors: string[] = [];
-  if (intrinsicStealth !== 1) factors.push(`×${formatMultiplier(intrinsicStealth)} intrinsic`);
-  if (positionStealth.value !== 1) factors.push(`×${formatMultiplier(positionStealth.value)} ${positionStealth.source}`);
-  if (gtgApplies) factors.push(`×${formatMultiplier(gtgMultiplier)} GtG`);
   const pos = position;
 
   return (

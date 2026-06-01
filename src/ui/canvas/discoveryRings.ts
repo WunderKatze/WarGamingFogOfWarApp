@@ -1,9 +1,8 @@
-import type { GameMap } from "../../core/map/GameMap.js";
 import { polygonTerrainCatalog } from "../../core/map/terrainCatalog.js";
 import { getRules, type Rules } from "../../core/rules.js";
 import type { PolygonTerrainType, Point, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
-import { getStealthAtPosition } from "./effectiveStealth.js";
+import type { VisionCalculator } from "../../core/VisionCalculator.js";
 
 /**
  * Pure ring-computation module for the Discovery Visualizer
@@ -146,44 +145,62 @@ export interface RingsForUnitOptions {
  * Incoming + outgoing rings for one own unit against the resolved lens.
  *
  * - Outgoing: `my.vision / threat.effective_stealth` — distance at which I detect the threat.
+ *   The threat is a synthetic UI archetype, not a real Unit, so its
+ *   effective stealth comes from `lens.threatEffectiveStealthMultiplier`
+ *   computed UI-side in `resolveLens`.
  * - Incoming: `threat.vision / my.effective_stealth_at_position` — distance at which the threat detects me.
- *   `my.effective_stealth_at_position` reads the unit's real concealment at `position`
- *   (terrain + inherent dug-in, single-highest), times the unit's intrinsic stealth,
- *   times GtG when concealed — matching the discover-calc semantics.
+ *   `my.effective_stealth_at_position` now comes from the engine's R4
+ *   read API (`vc.effectiveStealth`) — no UI-side composition. Closes
+ *   B7 in code-health-pass-ui.md.
  *
- * Pass `options.treatAsJustMoved` during a move preview — the unit's dug-in
- * and GtG flags are flipped off for the incoming calc (Recon retains GtG).
+ * Pass `options.treatAsJustMoved` during a move preview — the unit's
+ * dug-in and GtG flags are simulated as cleared (Recon retains GtG)
+ * by snapshotting + applying `onMoved()` + restoring around the engine
+ * call. The mutate-then-restore is a known seam; revisited if/when
+ * Unit gains a clone() method.
  */
 export function ringsForUnit(
   unit: Unit,
   position: Point,
-  map: GameMap,
+  vc: VisionCalculator,
   lens: ResolvedLens,
-  rules: Rules = getRules(),
   options: RingsForUnitOptions = {},
 ): Ring[] {
   const outgoingRadius = unit.getVision() / lens.threatEffectiveStealthMultiplier;
 
-  const myStealth = getStealthAtPosition(
-    unit,
-    position,
-    map,
-    options.treatAsJustMoved ? { skipInherent: true } : {},
-  );
-  const effectiveGtg = options.treatAsJustMoved
-    ? unit.hasModifier("Recon") && unit.goneToGround
-    : unit.goneToGround;
-  const myGtgStacks = effectiveGtg && myStealth.value > 1;
-  const myEffectiveStealth =
-    unit.getIntrinsicStealth() *
-    myStealth.value *
-    (myGtgStacks ? rules.goneToGroundStealthModifier : 1);
-  const incomingRadius = lens.archetype.vision / myEffectiveStealth;
+  const incomingStealth = options.treatAsJustMoved
+    ? effectiveStealthAsIfMoved(vc, unit, position)
+    : vc.effectiveStealth(unit, position);
+  const incomingRadius = lens.archetype.vision / incomingStealth.value;
 
   return [
     { radiusInches: incomingRadius, label: `${formatInches(incomingRadius)}″`, direction: "incoming" },
     { radiusInches: outgoingRadius, label: `${formatInches(outgoingRadius)}″`, direction: "outgoing" },
   ];
+}
+
+/**
+ * Compute the unit's effective stealth as if it had just been moved,
+ * without permanently mutating the unit.
+ *
+ * The engine's `effectiveStealth(unit, …)` reads the unit's *current*
+ * state. To answer "what would my stealth be right after a move?" we
+ * need the post-`onMoved()` state. Snapshot first, apply onMoved,
+ * read, then restore — leaves the unit unchanged at the call's edges.
+ *
+ * Single-threaded JS makes the brief mid-call mutation safe; React
+ * never re-renders in the middle of this synchronous body.
+ */
+function effectiveStealthAsIfMoved(
+  vc: VisionCalculator,
+  unit: Unit,
+  position: Point,
+) {
+  const snapshot = unit.captureMoveSnapshot();
+  unit.onMoved();
+  const result = vc.effectiveStealth(unit, position);
+  unit.applyMoveSnapshot(snapshot);
+  return result;
 }
 
 /**

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { Circle, Group, Text } from "react-konva";
-import type { GameMap } from "../../core/map/GameMap.js";
 import { type Rules } from "../../core/rules.js";
 import type { Point, TeamId } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
+import type { VisionCalculator } from "../../core/VisionCalculator.js";
 import {
   abstractDivisorRings,
   resolveLens,
@@ -11,7 +11,6 @@ import {
   type Ring,
   type ResolvedLens,
 } from "./discoveryRings.js";
-import { getStealthAtPosition } from "./effectiveStealth.js";
 import { useDiscoveryVisualizerContext } from "../hooks/useDiscoveryVisualizerContext.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useRulesContext } from "../hooks/useRulesContext.js";
@@ -65,7 +64,7 @@ export function DiscoveryVisualizerOverlay({ perspectiveTeamId }: Props) {
         enemy.teamId !== perspectiveTeamId &&
         game.state.visionState.revealed.has(enemy.id);
       if (isRevealedEnemy && enemy) {
-        return enemyAsLens(enemy, game.state.map, rules);
+        return enemyAsLens(enemy, game.visionCalculator, rules);
       }
     }
     return resolveLens(
@@ -96,7 +95,7 @@ export function DiscoveryVisualizerOverlay({ perspectiveTeamId }: Props) {
         const position = isPreviewing ? previewPositionOverride.position : unit.getPosition();
         const rings = lens === null
           ? abstractDivisorRings(unit, rules)
-          : ringsForUnit(unit, position, game.state.map, lens, rules, { treatAsJustMoved: isPreviewing });
+          : ringsForUnit(unit, position, game.visionCalculator, lens, { treatAsJustMoved: isPreviewing });
         return (
           <UnitRingGroup
             key={unit.id}
@@ -153,13 +152,33 @@ function UnitRingGroup({
 }
 
 /**
- * Build a ResolvedLens from a revealed enemy unit's actual state. Used by
- * the copy-from-hover feature. The lens's posture comes from the enemy's
- * real stealth-at-position; GtG comes from the enemy's real flag.
+ * Build a ResolvedLens from a revealed enemy unit's actual state. Used
+ * by the copy-from-hover feature.
+ *
+ * The lens reads the enemy's actual effective stealth through the engine
+ * R4 read API (R4 closes B7). For the `postureModifier` slot — which
+ * historically was just the position-only terrain stealth — we strip
+ * out the intrinsic + GtG factors so it represents the *cover-only*
+ * portion the player would see in the lens picker. The intrinsic and
+ * GtG-conditional factors are reapplied via the lens's existing
+ * `threatEffectiveStealthMultiplier` formula so the outgoing-ring math
+ * stays self-consistent with manually-picked lenses.
  */
-function enemyAsLens(enemy: Unit, map: GameMap, rules: Rules): ResolvedLens {
-  const stealth = getStealthAtPosition(enemy, enemy.getPosition(), map);
-  const gtgStacks = enemy.goneToGround && stealth.value > 1;
+function enemyAsLens(enemy: Unit, vc: VisionCalculator, rules: Rules): ResolvedLens {
+  // Position-only stealth read (no observer): this is the cover-only
+  // contribution from polygons containing the enemy's position. It
+  // mirrors what the player would pick from the posture dropdown.
+  const positionStealth = vc.effectiveStealth(enemy, enemy.getPosition());
+  // Strip intrinsic + GtG from the returned breakdown to isolate the
+  // "cover" portion. Intrinsic and GtG are re-applied below so the
+  // lens's posture aligns with what the dropdown options represent.
+  const coverReadings = positionStealth.breakdown.filter(
+    (r) => r.contributorId !== "intrinsic" && r.contributorId !== "gone-to-ground",
+  );
+  const posture = coverReadings.length === 0
+    ? 1
+    : coverReadings.reduce((m, r) => Math.max(m, r.modifier), 1);
+  const gtgStacks = enemy.goneToGround && posture > 1;
   return {
     archetype: {
       unitType: enemy.type,
@@ -168,11 +187,11 @@ function enemyAsLens(enemy: Unit, map: GameMap, rules: Rules): ResolvedLens {
       vision: enemy.getVision(),
       intrinsicStealth: enemy.getIntrinsicStealth(),
     },
-    postureModifier: stealth.value,
+    postureModifier: posture,
     goneToGround: enemy.goneToGround,
     threatEffectiveStealthMultiplier:
       enemy.getIntrinsicStealth() *
-      stealth.value *
+      posture *
       (gtgStacks ? rules.goneToGroundStealthModifier : 1),
   };
 }

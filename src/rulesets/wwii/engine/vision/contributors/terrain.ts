@@ -20,32 +20,53 @@ import type {
  * created it). The WWII composition rule then pools these by
  * single-highest with the inherent reading.
  *
- * Returns empty when there's no observer (position-only computations
- * can't ask about ray-direction-sensitive terrain — that's by design;
- * the caller should ask about specific polygons via the UI's existing
- * `getStealthAtPosition` helper instead).
+ * Two modes:
+ *   - **Ray-based** (observer given) — used by `discover` and by UI
+ *     calls that DO have an observer (e.g. Discovery Visualizer's
+ *     incoming ring). Walls and ray-direction-sensitive polygon rules
+ *     (asymmetric edge grace, Tall Woods depth limit) apply.
+ *   - **Position-only** (no observer) — used by UI surfaces asking
+ *     "what's this unit's stealth at this point?" without an
+ *     observer in mind (InfoMenu's unit panel, Discovery Visualizer's
+ *     outgoing ring). Returns readings for polygons containing the
+ *     position; walls are ray-based and have nothing meaningful to
+ *     contribute without a ray.
  */
 export const terrainContributor: Contributor = {
   id: "terrain",
   contribute(_target, position, map, observer) {
-    if (!observer) return [];
-    const observerPos = observer.getPosition();
     const readings: ContributorReading[] = [];
 
-    for (const wall of map.walls) {
-      const entry = wallTerrainCatalog[wall.wallType];
-      if (entry.appliesAsConcealment(wall, observerPos, position)) {
-        readings.push({
-          contributorId: "terrain",
-          modifier: entry.stealthMultiplier,
-          label: entry.displayName,
-        });
+    if (observer) {
+      const observerPos = observer.getPosition();
+      for (const wall of map.walls) {
+        const entry = wallTerrainCatalog[wall.wallType];
+        if (entry.appliesAsConcealment(wall, observerPos, position)) {
+          readings.push({
+            contributorId: "terrain",
+            modifier: entry.stealthMultiplier,
+            label: entry.displayName,
+          });
+        }
       }
+      for (const poly of map.polygons) {
+        const entry = polygonTerrainCatalog[poly.terrainType];
+        if (entry.appliesAsConcealment(poly, observerPos, position)) {
+          readings.push({
+            contributorId: "terrain",
+            modifier: entry.stealthMultiplier,
+            label: entry.displayName,
+          });
+        }
+      }
+      return readings;
     }
 
+    // Position-only mode: containing polygons contribute their
+    // stealthMultiplier; walls don't.
     for (const poly of map.polygons) {
-      const entry = polygonTerrainCatalog[poly.terrainType];
-      if (entry.appliesAsConcealment(poly, observerPos, position)) {
+      if (poly.containsPoint(position)) {
+        const entry = polygonTerrainCatalog[poly.terrainType];
         readings.push({
           contributorId: "terrain",
           modifier: entry.stealthMultiplier,
@@ -53,7 +74,6 @@ export const terrainContributor: Contributor = {
         });
       }
     }
-
     return readings;
   },
 };

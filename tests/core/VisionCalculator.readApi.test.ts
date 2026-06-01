@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { GameMap } from "../../src/core/map/GameMap.js";
 import { TerrainPolygon } from "../../src/core/map/TerrainPolygon.js";
-import { Infantry } from "../../src/core/units/Infantry.js";
-import { Tank } from "../../src/core/units/Tank.js";
+import { Infantry } from "../../src/rulesets/wwii/engine/units/Infantry.js";
+import { Tank } from "../../src/rulesets/wwii/engine/units/Tank.js";
 import { VisionCalculator } from "../../src/core/VisionCalculator.js";
 import { freePositionInches } from "../../src/rulesets/wwii/engine/substrate.js";
 import { wwiiVisionConfig } from "../../src/rulesets/wwii/engine/vision.js";

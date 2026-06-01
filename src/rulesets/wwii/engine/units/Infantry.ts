@@ -1,5 +1,5 @@
-import { getRules } from "../rules.js";
-import { Unit, type UnitInit } from "./Unit.js";
+import { getRules } from "../../../../core/rules.js";
+import { Unit, type UnitInit } from "../../../../core/units/Unit.js";
 
 export interface InfantryInit extends UnitInit {
   dugIn?: boolean;

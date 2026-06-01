@@ -1,6 +1,9 @@
 import type { Game } from "../../core/Game.js";
 import type { UnitId } from "../../core/types.js";
-import { Infantry } from "../../core/units/Infantry.js";
+// R3 violation (UI-core importing from rulesets/) — transitional B3
+// site: `u instanceof Infantry && u.dugIn` computes the D-badge set.
+// Phase B's modifier registry lifts this.
+import { Infantry } from "../../rulesets/wwii/engine/units/Infantry.js";
 
 export interface UnitStatusBadgeSets {
   dugInUnitIds: ReadonlySet<UnitId>;

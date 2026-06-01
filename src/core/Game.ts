@@ -1,8 +1,12 @@
 import { GameState, type GamePhase, type GameStateInit } from "./GameState.js";
 import type { Ruleset } from "./ruleset/index.js";
 import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "./types.js";
-import { Infantry } from "./units/Infantry.js";
-import { Tank } from "./units/Tank.js";
+// R3 violation (engine-core importing from rulesets/) — transitional.
+// Game.ts's buildUnit factory and toggleDugIn instanceof check still
+// hardcode the WWII unit subclasses; Phase B step 4 (data-driven unit
+// model) lifts these imports. See mechanics-refactor.md §13.1.
+import { Infantry } from "../rulesets/wwii/engine/units/Infantry.js";
+import { Tank } from "../rulesets/wwii/engine/units/Tank.js";
 import { Unit } from "./units/Unit.js";
 import { VisionCalculator } from "./VisionCalculator.js";
 

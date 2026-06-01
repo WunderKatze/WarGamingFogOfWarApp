@@ -3,8 +3,8 @@ import { Game } from "../../src/core/Game.js";
 import { GameMap } from "../../src/core/map/GameMap.js";
 import { wwiiRuleset } from "../../src/rulesets/wwii/engine/index.js";
 import type { Point } from "../../src/core/types.js";
-import { Infantry } from "../../src/core/units/Infantry.js";
-import { Tank } from "../../src/core/units/Tank.js";
+import { Infantry } from "../../src/rulesets/wwii/engine/units/Infantry.js";
+import { Tank } from "../../src/rulesets/wwii/engine/units/Tank.js";
 
 const p = (x: number, y: number): Point => ({ x, y });
 

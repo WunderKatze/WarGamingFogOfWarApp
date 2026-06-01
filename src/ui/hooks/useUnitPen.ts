@@ -1,7 +1,10 @@
 import { useState } from "react";
 import type { CreateUnitParams } from "../../core/Game.js";
 import type { Point, UnitSize, UnitType } from "../../core/types.js";
-import { Infantry } from "../../core/units/Infantry.js";
+// R3 violation (UI-core importing from rulesets/) — transitional B3
+// site: `unit instanceof Infantry` in loadFromUnit gates the dug-in
+// copy. Phase B's modifier registry lifts this.
+import { Infantry } from "../../rulesets/wwii/engine/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 
 /**

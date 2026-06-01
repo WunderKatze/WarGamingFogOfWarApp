@@ -7,7 +7,10 @@ import {
 } from "../../core/map/terrainCatalog.js";
 import { getRules } from "../../core/rules.js";
 import type { Point, TeamId } from "../../core/types.js";
-import { Infantry } from "../../core/units/Infantry.js";
+// R3 violation (UI-core importing from rulesets/) — transitional B3
+// site: `unit instanceof Infantry` gates the dug-in checkbox. Phase B's
+// modifier registry lifts this. See code-health-pass-ui.md §3 B3.
+import { Infantry } from "../../rulesets/wwii/engine/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { buildSidc } from "../canvas/sidc.js";
 import { useGameContext } from "../hooks/useGameContext.js";

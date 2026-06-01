@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { modifierEffects, unitTypeStats } from "../../../src/core/config.js";
-import { Tank } from "../../../src/core/units/Tank.js";
+import { modifierEffects, unitTypeStats } from "../../../../../src/core/config.js";
+import { Tank } from "../../../../../src/rulesets/wwii/engine/units/Tank.js";
 
 const at = (x: number, y: number) => ({ x, y });
 

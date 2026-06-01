@@ -275,7 +275,7 @@ export function MapEditor() {
     // Hand the freshly-built GameMap to the game alongside the existing
     // player set. resetWith constructs a fresh Game (Deploy phase,
     // empty vision state) — same flow as Restart, but with the new map.
-    resetWith({ map: toGameMap(workingMap), players: game.state.players });
+    resetWith({ map: toGameMap(workingMap), players: game.state.players, ruleset: game.ruleset });
     close();
   };
 

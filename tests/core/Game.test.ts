@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Game } from "../../src/core/Game.js";
 import { GameMap } from "../../src/core/map/GameMap.js";
+import { wwiiRuleset } from "../../src/rulesets/wwii/engine/index.js";
 import type { Point } from "../../src/core/types.js";
 import { Infantry } from "../../src/core/units/Infantry.js";
 import { Tank } from "../../src/core/units/Tank.js";
@@ -11,6 +12,7 @@ const makeGame = (mapWidth = 200, mapHeight = 200) =>
   new Game({
     map: new GameMap({ width: mapWidth, height: mapHeight }),
     players: ["A", "B"],
+    ruleset: wwiiRuleset,
   });
 
 describe("Game — constructor", () => {
@@ -24,7 +26,7 @@ describe("Game — constructor", () => {
 
   it("rejects fewer than 2 players", () => {
     expect(
-      () => new Game({ map: new GameMap({ width: 100, height: 100 }), players: ["solo"] }),
+      () => new Game({ map: new GameMap({ width: 100, height: 100 }), players: ["solo"], ruleset: wwiiRuleset }),
     ).toThrow(/at least 2 players/);
   });
 });

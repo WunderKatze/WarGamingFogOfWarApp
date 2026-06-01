@@ -1,4 +1,5 @@
 import { GameState, type GamePhase, type GameStateInit } from "./GameState.js";
+import type { Ruleset } from "./ruleset/index.js";
 import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "./types.js";
 import { Infantry } from "./units/Infantry.js";
 import { Tank } from "./units/Tank.js";
@@ -25,12 +26,47 @@ export interface CreateUnitParams {
 export class Game {
   readonly state: GameState;
   readonly visionCalculator: VisionCalculator;
+  /**
+   * The ruleset that drives this game. Phase B step 2a (Axis 1) reads
+   * `ruleset.gameflow` to route every phase transition through
+   * advanceFlow(). Later step-2 migrations will consult
+   * `ruleset.vision` (Axis 2) and `ruleset.substrate` (Axis 3).
+   */
+  readonly ruleset: Ruleset;
 
   private nextUnitIdCounter = 1;
 
   constructor(init: GameStateInit) {
     this.state = new GameState(init);
+    this.ruleset = init.ruleset;
     this.visionCalculator = new VisionCalculator(init.map);
+  }
+
+  /**
+   * Advance the state machine along a named transition in the
+   * ruleset's gameflow. Throws if no transition with that id exists
+   * starting from the current phase — keeps Game.ts and the registered
+   * flow in sync (a mismatch is a ruleset-or-engine bug worth crashing
+   * for, not silently ignoring).
+   *
+   * The `as GamePhase` cast on `transition.to` is the Phase B step 2a
+   * partial-migration seam: PhaseId is `string` (the engine doesn't
+   * yet enforce that WWII's phase names are the only valid ones), but
+   * GameState still types `phase` as the closed GamePhase enum so the
+   * UI's phase switches keep their exhaustiveness checks. The cast
+   * lifts when those switches migrate to flow-driven lookups.
+   */
+  private advanceFlow(transitionId: string): void {
+    const transition = this.ruleset.gameflow.transitions.find(
+      (t) => t.id === transitionId && t.from === this.state.phase,
+    );
+    if (!transition) {
+      throw new Error(
+        `Game.advanceFlow: no transition "${transitionId}" from phase ` +
+          `"${this.state.phase}" in ruleset "${this.ruleset.id}"`,
+      );
+    }
+    this.state.phase = transition.to as GamePhase;
   }
 
   // --- Deployment phase ---
@@ -63,7 +99,7 @@ export class Game {
     } else {
       this.state.activePlayerIndex = this.findNextUndeployedPlayer();
     }
-    this.state.phase = "Transition";
+    this.advanceFlow("endDeployment");
   }
 
   // --- Transition ---
@@ -107,7 +143,7 @@ export class Game {
     this.state.rulesChangedThisTurn = false;
     this.state.debugUsedThisTurn = false;
     if (!this.state.isDeploymentComplete()) {
-      this.state.phase = "Deploy";
+      this.advanceFlow("startTurn-to-Deploy");
       return;
     }
     this.state.turnNumber += 1;
@@ -119,7 +155,7 @@ export class Game {
     for (const unit of this.state.units) {
       if (unit.teamId === active) unit.goneToGround = true;
     }
-    this.state.phase = "AddRemoveUnits";
+    this.advanceFlow("startTurn-to-Round");
   }
 
   // --- Add/Remove Units phase ---
@@ -131,7 +167,7 @@ export class Game {
    */
   endAddRemoveUnits(): void {
     this.requirePhase("AddRemoveUnits");
-    this.state.phase = "Move";
+    this.advanceFlow("endAddRemoveUnits");
     this.runVisionPhase(new Set());
   }
 
@@ -276,7 +312,7 @@ export class Game {
   endMove(): void {
     this.requirePhase("Move");
     this.state.moveHistory = [];
-    this.state.phase = "FireDeclare";
+    this.advanceFlow("endMove");
     this.runVisionPhase(new Set());
   }
 
@@ -314,7 +350,7 @@ export class Game {
     this.state.firedThisTurn = new Set();
     this.state.movedThisTurn = new Set();
     this.state.activePlayerIndex = this.state.getNextPlayerIndex();
-    this.state.phase = "Transition";
+    this.advanceFlow("endTurn");
   }
 
   /**

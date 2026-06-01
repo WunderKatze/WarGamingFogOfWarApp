@@ -1,6 +1,7 @@
 import { GameMap } from "../core/map/GameMap.js";
 import { TerrainPolygon } from "../core/map/TerrainPolygon.js";
 import { TerrainWall } from "../core/map/TerrainWall.js";
+import { wwiiRuleset } from "../rulesets/wwii/engine/index.js";
 import { DiscoveryVisualizerPanel } from "./components/DiscoveryVisualizerPanel.js";
 import { GameMenu } from "./components/GameMenu.js";
 import { InfoMenu } from "./components/InfoMenu.js";
@@ -65,6 +66,7 @@ export function App() {
   const { game, dispatch, reset, resetWith } = useGame(() => ({
     map: buildDemoMap(),
     players: ["A", "B"],
+    ruleset: wwiiRuleset,
   }));
 
   return (

@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Owner:** Ryan
-**Last Updated:** 2026-05-26
+**Last Updated:** 2026-06-02
 
 > **Purpose.** Comprehensive view of what V2 hopes to achieve so we can converge on a feature list and an execution order. **Not** a single-feature spec — this is the planning doc that births the V2 feature docs that will live alongside it in [docs/features/v2/](.).
 >
@@ -22,19 +22,21 @@ The game is *playable* end-to-end as a companion — the player can run a 2-side
 
 ## 2. V2 in one paragraph
 
-V2 starts with **two ordered pre-feature passes** — a code-health survey (with an OO / extensibility focus) and a **mechanics refactor** that adds rule-system abstraction so this codebase can later serve more than just the current 1/100-scale WWII ruleset. After those land, V2 ships a small set of **refinements** to V1 surfaces that aren't quite right yet (unit deployment, terrain authoring, save/load bugs), then a set of **new general features** that fill in missing parts of the companion (transports, the Glimpse mechanic, fast movers / aircraft, area-attack / artillery blind-fire detection, detect-by-movement / mines). Every feature gets its own doc.
+V2 starts with a **code-health survey** (with an OO / extensibility focus). After that lands, V2 ships a small set of **refinements** to V1 surfaces that aren't quite right yet (unit deployment, terrain authoring, save/load bugs), then a set of **new general features** that fill in missing parts of the companion (transports, the Glimpse mechanic, fast movers / aircraft, area-attack / artillery blind-fire detection, detect-by-movement / mines). Every feature gets its own doc.
+
+> **Note (2026-06-02).** V2 originally also included a **mechanics refactor** (rule-system abstraction) as a second pre-feature pass. That work was attempted and reverted; the codebase commits to remaining WWII-only. See §9 for the recorded decision and [mechanics-refactor.md §0](mechanics-refactor.md) for the full retrospective.
 
 ---
 
 ## 3. Execution order
 
-V2 work proceeds in four serial phases. Items within a phase can interleave; items across phases cannot.
+V2 work proceeds in three serial phases (originally four — Phase B was attempted and reverted; see §9). Items within a phase can interleave; items across phases cannot.
 
-**Phase A — Code-health pass.** Survey of current code against established software-engineering standards. Focus on OO design opportunities and extensibility weaknesses (the codebase must remain extensible — particularly as Phase B introduces new abstractions). No new features land during this phase. See §4.1.
+**Phase A — Code-health pass.** ✅ Complete. Survey of current code against established software-engineering standards. Three commits landed (A1 VisionState encapsulation, A2 per-unit move snapshot, A3 terrain-vision primitives), plus the Phase A-2 UI refactor (U1 useVisibleUnits, U2 UnitPen + useUnitPen) and Phase A-3 tests pass. See §4.1.
 
-**Phase B — Mechanics refactor.** Introduces the layers of abstraction needed for the codebase to support multiple rule systems — variable vision rules, alternative map types (hex / grid), different unit base values. The current 1/100-scale WWII ruleset becomes one configuration of the refactored mechanics, not the only thing the code knows how to be. Gets its own deep-dive document. No new features land during this phase. See §4.2.
+**~~Phase B — Mechanics refactor.~~** ❌ Reverted 2026-06-02. The rule-system abstraction layer was attempted across 14 commits and reverted. The codebase commits to WWII-only; future second-ruleset support comes via fork-per-ruleset, not pre-built abstraction. Retrospective in [mechanics-refactor.md §0](mechanics-refactor.md); strategic decision recorded in §9 below.
 
-**Phase C — Refinements to V1 features.** Three V1 surfaces that need a second pass before V2 builds further on them. Each gets its own doc. See §5.
+**Phase C — Refinements to V1 features.** Three V1 surfaces that need a second pass. Each gets its own doc. See §5.
 
 **Phase D — New general features.** Five new companion mechanics. Each gets its own doc; order within phase TBD. See §6.
 
@@ -51,26 +53,9 @@ A structured survey of the V1 codebase against established software-engineering 
 
 Output: a short report (its own doc) + a sequence of refactor commits. Refactors should be behavior-preserving and individually committable.
 
-### 4.2 Mechanics Refactor (rule-system abstraction)
+### 4.2 ~~Mechanics Refactor (rule-system abstraction)~~ — reverted
 
-Currently V1's mechanics are hard-coded to one wargame — a 1/100-scale WWII ruleset. The model layer reflects that: `Unit` knows `Tank` vs `Infantry`, the rules object knows `Recon` as the one modifier, the map knows three polygon terrain kinds and two wall kinds, vision is range-divided-by-stealth with one specific GtG rule, and the turn machine is a fixed `Deploy → Move → FireDeclare → Transition` sequence with each player taking a full turn at a time.
-
-V2 layers new abstractions on top so a different ruleset (different unit types, different map geometry like hex / grid, different base values) can be loaded as a configuration rather than a fork. This is the architectural shift that lets the WWII ruleset keep developing in parallel with future rulesets without churning each other.
-
-The refactor has three identified axes:
-
-1. **Turn / phase flow.** The current fixed phase sequence is one game's turn structure. Other wargames vary widely:
-   - Alternating-by-phase: P1 moves, P2 moves, P1 shoots, P2 shoots.
-   - Activation-based: a player activates only a handful of units before the turn order swaps.
-   - Initiative-based, simultaneous, hybrid, etc.
-   
-   The refactor decomposes the current `Game` state-machine into a **grab bag of reusable building blocks** (phase definitions, transition rules, activation models, end-of-turn triggers) that a game flow is composed from. Authoring a new turn structure means assembling existing blocks, not editing the state-machine class.
-
-2. **Vision rules.** Most pieces (GtG stacking, edge grace, dug-in, single-highest-modifier-pool, Recon trait, etc.) are this ruleset's choices and need to become opt-in / configurable rather than baked into `VisionCalculator`. The discover algorithm itself stays — but the modifiers and the per-phase wiring that uses them become a configuration. **The single invariant across all wargames this codebase will represent:** discovery happens when `distance ≤ observer.vision / target.effective_stealth`. That formula is the load-bearing primitive everything else slots into; the refactor preserves it, generalizes everything around it.
-
-3. **Map model.** Free-position inches (current V1 model) is one geometry. Hex and square-grid are alternatives. The polygon / wall catalog model already extends well — the bigger lift is the position substrate and how units snap / move on it.
-
-This is significant scope and gets its own document. The goal here is the *separation* — concrete second/third rulesets are out of scope for V2; we just want the abstraction to exist and be exercised by at least one alternative test ruleset (likely a stripped-down "alternate turn-flow" ruleset that proves the building-block model works, not a fully-realized different game).
+Originally planned as the second pre-feature pass. Attempted across 14 commits and reverted 2026-06-02. The retrospective lives in [mechanics-refactor.md §0](mechanics-refactor.md); the strategic shift to fork-per-ruleset is recorded in §9 below. The original description is preserved in that doc for historical context.
 
 ---
 
@@ -139,26 +124,30 @@ Things explicitly NOT V2 — captured so they don't accidentally creep in. All f
 - **Rolled combat resolution.** Fires are resolved at the physical table with physical dice. The app records who fired (already does — `firedThisTurn`) and surfaces the reveal consequence, but never simulates a roll, computes damage, or removes a unit because of combat math.
 - **Automated unit removal.** Removal is the player's call, based on what happened at the table. The app doesn't decide.
 - **Simulated AI opponents.** This is a 2+ human player companion; no AI side.
-- **Concrete second / third rulesets.** Phase B builds the abstraction; actually authoring a non-WWII ruleset is V3+.
+- **Concrete second / third rulesets — *and* the abstraction layer that would support them.** Authoring a non-WWII ruleset is V3+. The Phase B attempt at pre-building a rule-system abstraction was reverted; see §9. When V3+ wants a second ruleset, the path is fork-per-ruleset.
 
 ---
 
-## 9. Open questions
+## 9. Recorded decisions
 
-1. **Does Phase A produce one report + refactor commits, or split into "survey commit" → "refactor PR(s)" → "lessons-learned commit"?** Affects how visible the survey work is in the history.
-2. **Phase B scope ceiling.** How much abstraction is "enough" before we stop and let features build on it? Easy to over-build; easy to under-build and need a Phase B-2 later. The Phase B doc needs to pin this down.
-3. **Game-menu Import + Debug-notice bug split.** Are both squarely §5.3, or does Debug-notice belong elsewhere?
-4. **Glimpse cost model.** Per-move ray-march every cursor frame, or only on commit? Affects how snappy MoveView feels.
-5. **Area-attack template authoring.** Built-in template shapes only, or player-editable templates (like terrain in the map editor)?
-6. **Detect-by-movement granularity.** Path-segment intersection check, or continuous proximity sweep? Trade-off between accuracy and cost.
-7. *(Add as they come up.)*
+**D1 — Mechanics refactor reverted; codebase stays WWII-only (2026-06-02).** The Phase B rule-system abstraction was attempted across 14 commits and reverted. The work produced more paper abstraction than load-bearing decoupling — Axis 1 (gameflow) was declared as data but never consulted, and the "test ruleset" was a stub manufactured to make slots look exercised rather than a real second consumer. The decisive concern: every future Phase C/D feature would pay a recurring abstraction tax to support a use case (second ruleset) that's V3+ and may not happen. Forward strategy: fork-per-ruleset when V3+ wants a second wargame; extract real shared abstractions later from two-datapoint comparison. The attempt is preserved on the `archive/phase-b` branch; the retrospective lives in [mechanics-refactor.md §0](mechanics-refactor.md).
 
 ---
 
-## 10. Index of V2 feature docs
+## 10. Open questions
+
+1. **Game-menu Import + Debug-notice bug split.** Are both squarely §5.3, or does Debug-notice belong elsewhere?
+2. **Glimpse cost model.** Per-move ray-march every cursor frame, or only on commit? Affects how snappy MoveView feels.
+3. **Area-attack template authoring.** Built-in template shapes only, or player-editable templates (like terrain in the map editor)?
+4. **Detect-by-movement granularity.** Path-segment intersection check, or continuous proximity sweep? Trade-off between accuracy and cost.
+5. *(Add as they come up.)*
+
+---
+
+## 11. Index of V2 feature docs
 
 As individual features spin off into Draft docs, list them here. Each line: doc + status + phase.
 
-- [mechanics-refactor.md](mechanics-refactor.md) — Draft — Phase B §4.2
+- [mechanics-refactor.md](mechanics-refactor.md) — Reverted (record of attempt) — formerly Phase B §4.2
 - [terrain-collection.md](terrain-collection.md) — Draft (parked) — Phase C §5.2
 - *(more to come)*

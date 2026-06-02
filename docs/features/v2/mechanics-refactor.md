@@ -1,11 +1,65 @@
 # Feature: Mechanics Refactor (rule-system abstraction)
 
-**Status:** Draft
-**Target Version:** v2
+**Status:** Reverted (record of attempt)
+**Target Version:** v2 (attempted, reverted 2026-06-02)
 **Owner:** Ryan
-**Last Updated:** 2026-05-29
+**Last Updated:** 2026-06-02
 
-> **Scope note.** Architectural refactor that introduces the layers of abstraction needed for the codebase to support more than one wargame rule system. V1 was tightly coupled to a specific 1/100-scale WWII ruleset; V2 separates the "what's specific to this game" from the "what's structural to any wargame this codebase represents." Owns its own doc because it's the V2 Phase B work block and the largest single architectural change of V2. See the parent plan in [v2-requirements.md §3 / §4.2](v2-requirements.md).
+---
+
+## 0. Retrospective (2026-06-02)
+
+This refactor was attempted and **reverted in commit `74af4fe`**. The full attempt is preserved on the `archive/phase-b` branch for reference. This doc stays in the repo as a record of what was tried and what was learned, not as an active plan.
+
+### What was attempted
+
+14 commits (`e7d7ad1..3f5bc82`) landed across four steps:
+- **Step 1** — interfaces: `Ruleset` spine + registry, `GameFlow` types, contributor + composition rule types, `Substrate` interface.
+- **Step 2** — WWII migration: WWII as a registered ruleset with its own gameflow, vision contributors, substrate, terrain catalog; R3 file split moved Infantry/Tank/catalog into `src/rulesets/wwii/`.
+- **Step 3** — test ruleset: a small "alt-WWII" that varied vision composition + substrate distance to prove the abstractions.
+- **Step 4** — data-driven unit model: unit-type registry + toggleable-modifier abstraction lifted the residual `instanceof Infantry` checks from engine-core.
+
+End state at revert: 296 tests passing, typecheck clean. Two pieces of the planned work were never reached: a fully flow-driven Game.ts state machine (the Axis 1 finishing work) and `Unit` base cleanup (B4 `goneToGround`, B5 Recon checks from the Phase A health pass).
+
+### Why it was reverted
+
+The honest scorecard after the work:
+
+| Axis / goal | Real abstraction | Paper abstraction |
+|---|---|---|
+| Axis 1 — gameflow | — | ✓ declared as data, never consulted by engine |
+| Axis 2 — vision contributors | ✓ | — |
+| Axis 3 — substrate distance | ✓ (narrow) | — |
+| R3 file split | ✓ | — |
+| Unit-type registry | ✓ | — |
+| Toggleable modifiers | ✓ | — |
+| `runVisionPhase` reveal orchestration | — | (still hardcoded WWII algorithm) |
+| `Unit` base purity (B4, B5) | — | (still has WWII `goneToGround` + Recon checks) |
+
+**The decisive concern.** With Phase B in place, every future feature in Phase C/D would pay a recurring abstraction tax — mental overhead of "where does this go?", test-fixture ruleset wiring, `UnitType = string` widening propagating `!` assertions, indirection through registries instead of direct switches. Most upcoming features (transports, glimpse, fast movers, area attacks, detect-by-movement, terrain collection) are new-mechanic-shaped, so they'd trigger the "engine-core or ruleset?" decision tree under an abstraction that was already partly paper. The recurring cost to support a use case (second ruleset) that's V3+ and may not happen wasn't worth it.
+
+### What was learned
+
+1. **Extraction isn't design.** Phase B took the WWII shape and labeled slots around it. Without a second concrete ruleset driving the design, the seams reflected WWII's idiosyncrasies more than universal needs. The "test ruleset" was a stub manufactured to make the slots look exercised — not a real second consumer.
+
+2. **Paper abstraction is worse than no abstraction.** A slot that looks load-bearing but isn't gives false confidence. Future contributors trust the abstraction and discover the gap at the worst time. Axis 1 was the canonical example: `Ruleset.gameflow.phases[].activationModel` was declared by the test ruleset as `alternating-units`, but no engine code ever branched on it.
+
+3. **The V3+ second-ruleset use case is best served by a fork, not a pre-built abstraction.** A real second ruleset built independently would reveal the *actual* shared needs; extraction after two concrete datapoints is reliable. Pre-extraction from one is speculation.
+
+### Forward strategy
+
+- **WWII-only codebase.** This app is the WWII fog-of-war engine. Future features build against that shape directly.
+- **Phase A wins are preserved.** VisionState encapsulation, per-unit move snapshot, terrain-vision primitives, UI hook extractions (useVisibleUnits, UnitPen + useUnitPen) — those are pure quality improvements independent of any multi-ruleset story and stayed in place through the revert.
+- **Fork-per-ruleset when V3+ wants a second wargame.** Branch from a known-good state, build the second ruleset's engine independently, then extract real shared abstractions from the two-datapoint comparison.
+- **v2-requirements.md updated** to remove Phase B from the execution order and document the strategic shift.
+
+### What's preserved on `archive/phase-b`
+
+The full 14-commit Phase B series, on a branch pushed to origin for posterity. If a future attempt wants to revisit any specific extraction (e.g. the contributor pipeline as a within-WWII improvement), the implementation is recoverable there.
+
+---
+
+> **Original scope note (preserved below for historical context).** Architectural refactor that introduces the layers of abstraction needed for the codebase to support more than one wargame rule system. V1 was tightly coupled to a specific 1/100-scale WWII ruleset; V2 separates the "what's specific to this game" from the "what's structural to any wargame this codebase represents." Owns its own doc because it's the V2 Phase B work block and the largest single architectural change of V2. See the parent plan in [v2-requirements.md §3 / §4.2](v2-requirements.md).
 >
 > **Why this doc first.** This is the V2 Phase B work, but the *scoping doc* gets drafted before Phase A (the code-health survey) so the survey has a clear target to evaluate against. Knowing what abstractions we want lets the health pass spot the V1 shapes that fight them.
 

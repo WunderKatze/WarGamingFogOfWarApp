@@ -4,10 +4,6 @@ import type { Game } from "../../core/Game.js";
 import type { TerrainCatalog } from "../../core/map/terrainCatalog.js";
 import { getRules } from "../../core/rules.js";
 import type { Point, TeamId } from "../../core/types.js";
-// R3 violation (UI-core importing from rulesets/) — transitional B3
-// site: `unit instanceof Infantry` gates the dug-in checkbox. Phase B's
-// modifier registry lifts this. See code-health-pass-ui.md §3 B3.
-import { Infantry } from "../../rulesets/wwii/engine/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 import { buildSidc } from "../canvas/sidc.js";
 import { useGameContext } from "../hooks/useGameContext.js";
@@ -159,20 +155,20 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
           </span>
         </div>
       )}
-      {unit instanceof Infantry && (
+      {unit.supportsToggleable("dugIn") && (
         <div style={detailRowStyle}>
           {isFriendly ? (
             <label style={checkboxLabelStyle}>
               <input
                 type="checkbox"
-                checked={unit.dugIn}
-                onChange={() => dispatch((g) => g.toggleDugIn(unit.id))}
+                checked={unit.getToggleableState("dugIn")}
+                onChange={() => dispatch((g) => g.toggleToggleable(unit.id, "dugIn"))}
               />
               Dug-In
             </label>
           ) : (
             <label style={{ ...checkboxLabelStyle, cursor: "default" }}>
-              <input type="checkbox" checked={unit.dugIn} disabled readOnly />
+              <input type="checkbox" checked={unit.getToggleableState("dugIn")} disabled readOnly />
               Dug-In
             </label>
           )}

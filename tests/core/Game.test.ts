@@ -269,7 +269,7 @@ describe("Game — Move phase", () => {
     expect(g.state.visionState.revealed.has("u1")).toBe(false);
   });
 
-  it("toggleDugIn flips Infantry dugIn", () => {
+  it('toggleToggleable("dugIn") flips Infantry dugIn', () => {
     const g = makeGame();
     const inf = g.deployUnit({ type: "Infantry", name: "I", position: p(0, 0) });
     g.endDeployment();
@@ -280,13 +280,22 @@ describe("Game — Move phase", () => {
     g.startTurn();
     g.endAddRemoveUnits();
     expect((inf as Infantry).dugIn).toBe(true);
-    g.toggleDugIn(inf.id);
+    g.toggleToggleable(inf.id, "dugIn");
     expect((inf as Infantry).dugIn).toBe(false);
   });
 
-  it("toggleDugIn throws for Tanks", () => {
+  it('toggleToggleable("dugIn") throws for Tanks (Tank does not support dugIn)', () => {
     const g = setupAtMove();
-    expect(() => g.toggleDugIn("u1")).toThrow(/not Infantry/);
+    expect(() => g.toggleToggleable("u1", "dugIn")).toThrow(
+      /does not support toggleable modifier "dugIn"/,
+    );
+  });
+
+  it("toggleToggleable throws for any unknown modifier id", () => {
+    const g = setupAtMove();
+    expect(() => g.toggleToggleable("u1", "nonexistent")).toThrow(
+      /does not support toggleable modifier "nonexistent"/,
+    );
   });
 
   it("moveUnit clears dug-in on Infantry", () => {

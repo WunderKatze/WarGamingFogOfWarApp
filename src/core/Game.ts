@@ -1,13 +1,6 @@
 import { GameState, type GamePhase, type GameStateInit } from "./GameState.js";
 import type { Ruleset } from "./ruleset/index.js";
 import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "./types.js";
-// R3 violation (engine-core importing from rulesets/) — transitional.
-// Phase B step 4a lifted buildUnit's WWII-subclass switch into a
-// ruleset.unitTypes registry lookup. The residual `Infantry` import
-// here serves toggleDugIn's `instanceof Infantry` check only;
-// step 4b's toggleable-modifier abstraction lifts that too. See
-// mechanics-refactor.md §13.1.
-import { Infantry } from "../rulesets/wwii/engine/units/Infantry.js";
 import { Unit } from "./units/Unit.js";
 import { VisionCalculator } from "./VisionCalculator.js";
 
@@ -310,13 +303,23 @@ export class Game {
     unit.name = trimmed;
   }
 
-  toggleDugIn(unitId: UnitId): void {
+  /**
+   * Flip a boolean toggleable modifier (e.g. WWII Infantry's "dugIn")
+   * on a unit. Throws if the unit's type doesn't declare the modifier
+   * — engine-core stays ruleset-agnostic via the `supportsToggleable`
+   * contract rather than `instanceof`-checking concrete subclasses.
+   * Phase B step 4b.
+   */
+  toggleToggleable(unitId: UnitId, modifierId: string): void {
     this.requirePhase("Move");
     const unit = this.requireOwnUnit(unitId);
-    if (!(unit instanceof Infantry)) {
-      throw new Error(`toggleDugIn: unit ${unitId} is not Infantry`);
+    if (!unit.supportsToggleable(modifierId)) {
+      throw new Error(
+        `toggleToggleable: unit ${unitId} (type "${unit.type}") does not ` +
+          `support toggleable modifier "${modifierId}"`,
+      );
     }
-    unit.setDugIn(!unit.dugIn);
+    unit.setToggleableState(modifierId, !unit.getToggleableState(modifierId));
   }
 
   endMove(): void {

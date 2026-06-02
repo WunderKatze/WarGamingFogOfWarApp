@@ -1,6 +1,7 @@
 import { GameState, type GamePhase, type GameStateInit } from "./GameState.js";
-import type { Ruleset } from "./ruleset/index.js";
 import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "./types.js";
+import { Infantry } from "./units/Infantry.js";
+import { Tank } from "./units/Tank.js";
 import { Unit } from "./units/Unit.js";
 import { VisionCalculator } from "./VisionCalculator.js";
 
@@ -24,52 +25,12 @@ export interface CreateUnitParams {
 export class Game {
   readonly state: GameState;
   readonly visionCalculator: VisionCalculator;
-  /**
-   * The ruleset that drives this game. Phase B step 2a (Axis 1) reads
-   * `ruleset.gameflow` to route every phase transition through
-   * advanceFlow(). Later step-2 migrations will consult
-   * `ruleset.vision` (Axis 2) and `ruleset.substrate` (Axis 3).
-   */
-  readonly ruleset: Ruleset;
 
   private nextUnitIdCounter = 1;
 
   constructor(init: GameStateInit) {
     this.state = new GameState(init);
-    this.ruleset = init.ruleset;
-    this.visionCalculator = new VisionCalculator(
-      init.map,
-      init.ruleset.vision,
-      init.ruleset.substrate,
-      init.ruleset.terrain,
-    );
-  }
-
-  /**
-   * Advance the state machine along a named transition in the
-   * ruleset's gameflow. Throws if no transition with that id exists
-   * starting from the current phase — keeps Game.ts and the registered
-   * flow in sync (a mismatch is a ruleset-or-engine bug worth crashing
-   * for, not silently ignoring).
-   *
-   * The `as GamePhase` cast on `transition.to` is the Phase B step 2a
-   * partial-migration seam: PhaseId is `string` (the engine doesn't
-   * yet enforce that WWII's phase names are the only valid ones), but
-   * GameState still types `phase` as the closed GamePhase enum so the
-   * UI's phase switches keep their exhaustiveness checks. The cast
-   * lifts when those switches migrate to flow-driven lookups.
-   */
-  private advanceFlow(transitionId: string): void {
-    const transition = this.ruleset.gameflow.transitions.find(
-      (t) => t.id === transitionId && t.from === this.state.phase,
-    );
-    if (!transition) {
-      throw new Error(
-        `Game.advanceFlow: no transition "${transitionId}" from phase ` +
-          `"${this.state.phase}" in ruleset "${this.ruleset.id}"`,
-      );
-    }
-    this.state.phase = transition.to as GamePhase;
+    this.visionCalculator = new VisionCalculator(init.map);
   }
 
   // --- Deployment phase ---
@@ -102,7 +63,7 @@ export class Game {
     } else {
       this.state.activePlayerIndex = this.findNextUndeployedPlayer();
     }
-    this.advanceFlow("endDeployment");
+    this.state.phase = "Transition";
   }
 
   // --- Transition ---
@@ -146,7 +107,7 @@ export class Game {
     this.state.rulesChangedThisTurn = false;
     this.state.debugUsedThisTurn = false;
     if (!this.state.isDeploymentComplete()) {
-      this.advanceFlow("startTurn-to-Deploy");
+      this.state.phase = "Deploy";
       return;
     }
     this.state.turnNumber += 1;
@@ -158,7 +119,7 @@ export class Game {
     for (const unit of this.state.units) {
       if (unit.teamId === active) unit.goneToGround = true;
     }
-    this.advanceFlow("startTurn-to-Round");
+    this.state.phase = "AddRemoveUnits";
   }
 
   // --- Add/Remove Units phase ---
@@ -170,7 +131,7 @@ export class Game {
    */
   endAddRemoveUnits(): void {
     this.requirePhase("AddRemoveUnits");
-    this.advanceFlow("endAddRemoveUnits");
+    this.state.phase = "Move";
     this.runVisionPhase(new Set());
   }
 
@@ -303,29 +264,19 @@ export class Game {
     unit.name = trimmed;
   }
 
-  /**
-   * Flip a boolean toggleable modifier (e.g. WWII Infantry's "dugIn")
-   * on a unit. Throws if the unit's type doesn't declare the modifier
-   * — engine-core stays ruleset-agnostic via the `supportsToggleable`
-   * contract rather than `instanceof`-checking concrete subclasses.
-   * Phase B step 4b.
-   */
-  toggleToggleable(unitId: UnitId, modifierId: string): void {
+  toggleDugIn(unitId: UnitId): void {
     this.requirePhase("Move");
     const unit = this.requireOwnUnit(unitId);
-    if (!unit.supportsToggleable(modifierId)) {
-      throw new Error(
-        `toggleToggleable: unit ${unitId} (type "${unit.type}") does not ` +
-          `support toggleable modifier "${modifierId}"`,
-      );
+    if (!(unit instanceof Infantry)) {
+      throw new Error(`toggleDugIn: unit ${unitId} is not Infantry`);
     }
-    unit.setToggleableState(modifierId, !unit.getToggleableState(modifierId));
+    unit.setDugIn(!unit.dugIn);
   }
 
   endMove(): void {
     this.requirePhase("Move");
     this.state.moveHistory = [];
-    this.advanceFlow("endMove");
+    this.state.phase = "FireDeclare";
     this.runVisionPhase(new Set());
   }
 
@@ -363,7 +314,7 @@ export class Game {
     this.state.firedThisTurn = new Set();
     this.state.movedThisTurn = new Set();
     this.state.activePlayerIndex = this.state.getNextPlayerIndex();
-    this.advanceFlow("endTurn");
+    this.state.phase = "Transition";
   }
 
   /**
@@ -425,23 +376,21 @@ export class Game {
     defaultDugIn: boolean,
     defaultGoneToGround: boolean,
   ): Unit {
-    const entry = this.ruleset.unitTypes[params.type];
-    if (!entry) {
-      throw new Error(
-        `Game.buildUnit: ruleset "${this.ruleset.id}" registers no unit ` +
-          `type "${params.type}"`,
-      );
-    }
-    return entry.construct({
-      id: this.generateUnitId(),
-      teamId: this.state.getActivePlayer(),
+    const id = this.generateUnitId();
+    const teamId = this.state.getActivePlayer();
+    const common = {
+      id,
+      teamId,
       name: params.name,
       position: params.position,
       goneToGround: defaultGoneToGround,
       ...(params.size !== undefined && { size: params.size }),
       ...(params.modifiers !== undefined && { modifiers: params.modifiers }),
-      dugIn: params.dugIn ?? defaultDugIn,
-    });
+    };
+    if (params.type === "Tank") {
+      return new Tank(common);
+    }
+    return new Infantry({ ...common, dugIn: params.dugIn ?? defaultDugIn });
   }
 
   private generateUnitId(): UnitId {

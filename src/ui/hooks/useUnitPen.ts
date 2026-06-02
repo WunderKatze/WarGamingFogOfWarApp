@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CreateUnitParams } from "../../core/Game.js";
 import type { Point, UnitSize, UnitType } from "../../core/types.js";
+import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
 
 /**
@@ -74,9 +75,8 @@ export interface UseUnitPenReturn {
  * resetting its addPrimed flag) without round-tripping through the form.
  *
  * See docs/features/v2/code-health-pass-ui.md §2 U2 for context. The
- * Phase B step 4b toggleable-modifier abstraction is what lets
- * loadFromUnit ask `unit.supportsToggleable("dugIn")` instead of
- * `instanceof Infantry`.
+ * `instanceof Infantry` check inside loadFromUnit is the B3-tracked
+ * smell that Phase B's modifier registry resolves.
  */
 export function useUnitPen(opts: UseUnitPenOptions): UseUnitPenReturn {
   const { defaults = {} } = opts;
@@ -104,12 +104,10 @@ export function useUnitPen(opts: UseUnitPenOptions): UseUnitPenReturn {
     setType(unit.type);
     setSize(unit.size);
     setRecon(unit.hasModifier("Recon"));
-    if (unit.supportsToggleable("dugIn")) {
-      setDugIn(unit.getToggleableState("dugIn"));
-    }
-    // For unit types that don't support dug-in, leave the pen's dugIn
-    // value as-is — the source has no state to copy, and the user may
-    // switch the pen back to a dug-in-capable type next.
+    if (unit instanceof Infantry) setDugIn(unit.dugIn);
+    // For non-Infantry sources, leave dugIn as-is — the source has no
+    // dugIn state to copy, and the user may switch the pen back to
+    // Infantry next.
   };
 
   const clearName = (): void => setName("");

@@ -46,7 +46,7 @@ describe("rules — defaults baseline", () => {
   it("getRules returns the default values on first call", () => {
     expect(getRules().goneToGroundStealthModifier).toBe(defaultRules.goneToGroundStealthModifier);
     expect(getRules().tallWoodsRayThroughLimit).toBe(defaultRules.tallWoodsRayThroughLimit);
-    expect(getRules().unitTypeStats.Infantry!.baseVision).toBe(defaultRules.unitTypeStats.Infantry!.baseVision);
+    expect(getRules().unitTypeStats.Infantry.baseVision).toBe(defaultRules.unitTypeStats.Infantry.baseVision);
   });
 
   it("defaultRules is frozen at the top level", () => {
@@ -62,11 +62,11 @@ describe("rules — defaults baseline", () => {
 
 describe("rules — setRules", () => {
   it("merges partial updates at the top level (leaves untouched fields intact)", () => {
-    const beforeVision = getRules().unitTypeStats.Infantry!.baseVision;
+    const beforeVision = getRules().unitTypeStats.Infantry.baseVision;
     setRules({ goneToGroundStealthModifier: 5 });
     expect(getRules().goneToGroundStealthModifier).toBe(5);
     // unrelated field stays at default
-    expect(getRules().unitTypeStats.Infantry!.baseVision).toBe(beforeVision);
+    expect(getRules().unitTypeStats.Infantry.baseVision).toBe(beforeVision);
   });
 
   it("replaces nested objects wholesale (merge is shallow by design)", () => {
@@ -78,8 +78,8 @@ describe("rules — setRules", () => {
       Tank: { baseVision: 99, baseStealth: 99 },
     };
     setRules({ unitTypeStats: fullStats });
-    expect(getRules().unitTypeStats.Infantry!.baseVision).toBe(99);
-    expect(getRules().unitTypeStats.Tank!.baseStealth).toBe(99);
+    expect(getRules().unitTypeStats.Infantry.baseVision).toBe(99);
+    expect(getRules().unitTypeStats.Tank.baseStealth).toBe(99);
   });
 
   it("getRules returns a new object reference after setRules (so React can compare)", () => {
@@ -116,8 +116,8 @@ describe("rules — resetRules", () => {
       },
     });
     resetRules();
-    expect(getRules().unitTypeStats.Infantry!.baseVision).toBe(defaultRules.unitTypeStats.Infantry!.baseVision);
-    expect(getRules().unitTypeStats.Tank!.baseStealth).toBe(defaultRules.unitTypeStats.Tank!.baseStealth);
+    expect(getRules().unitTypeStats.Infantry.baseVision).toBe(defaultRules.unitTypeStats.Infantry.baseVision);
+    expect(getRules().unitTypeStats.Tank.baseStealth).toBe(defaultRules.unitTypeStats.Tank.baseStealth);
   });
 
   it("gives a deep-cloned copy each time (mutations to one reset's result don't bleed into the next)", () => {

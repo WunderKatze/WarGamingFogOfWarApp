@@ -1,5 +1,4 @@
 import { GameMap } from "./map/GameMap.js";
-import type { Ruleset } from "./ruleset/index.js";
 import type { TeamId, UnitId } from "./types.js";
 import { Unit, type UnitMoveSnapshot } from "./units/Unit.js";
 import { createEmptyVisionState, type VisionState } from "./VisionState.js";
@@ -40,13 +39,6 @@ export interface GameStateInit {
   map: GameMap;
   /** Ordered list of player team ids. Player at index 0 deploys and moves first. */
   players: readonly TeamId[];
-  /**
-   * The ruleset that drives this game. The state machine's transitions
-   * consult `ruleset.gameflow`; later Phase B migrations will read
-   * `ruleset.vision` and `ruleset.substrate` similarly. Added in Phase B
-   * step 2a (Axis 1 migration).
-   */
-  ruleset: Ruleset;
 }
 
 /**
@@ -65,7 +57,7 @@ export class GameState {
   units: Unit[] = [];
   visionState: VisionState = createEmptyVisionState();
 
-  phase: GamePhase;
+  phase: GamePhase = "Deploy";
   activePlayerIndex = 0;
   turnNumber = 0;
 
@@ -125,12 +117,6 @@ export class GameState {
     }
     this.map = init.map;
     this.players = [...init.players];
-    // Initial phase is whichever phase the ruleset's gameflow declares
-    // as initialPhaseId. The cast reflects the partial Phase B step 2a
-    // state: GameState still types `phase` as the WWII-specific
-    // GamePhase enum for UI exhaustiveness checking. The enum lifts
-    // when the UI's phase switches migrate to flow-driven lookups.
-    this.phase = init.ruleset.gameflow.initialPhaseId as GamePhase;
   }
 
   getActivePlayer(): TeamId {

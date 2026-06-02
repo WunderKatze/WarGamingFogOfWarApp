@@ -1,5 +1,6 @@
 import type { Game } from "../../core/Game.js";
 import type { UnitId } from "../../core/types.js";
+import { Infantry } from "../../core/units/Infantry.js";
 
 export interface UnitStatusBadgeSets {
   dugInUnitIds: ReadonlySet<UnitId>;
@@ -13,17 +14,11 @@ export interface UnitStatusBadgeSets {
  * player simply aren't passed to MapCanvas, so they don't render the
  * badges incidentally. This helper produces the two id sets to thread
  * through MapCanvas; membership is checked per-token.
- *
- * Filtering goes through `supportsToggleable("dugIn")` rather than
- * `instanceof Infantry` so engine-core / UI-core stay ruleset-agnostic
- * (Phase B step 4b).
  */
 export function computeUnitStatusBadges(game: Game): UnitStatusBadgeSets {
   return {
     dugInUnitIds: new Set(
-      game.state.units
-        .filter((u) => u.supportsToggleable("dugIn") && u.getToggleableState("dugIn"))
-        .map((u) => u.id),
+      game.state.units.filter((u) => u instanceof Infantry && u.dugIn).map((u) => u.id),
     ),
     goneToGroundUnitIds: new Set(
       game.state.units.filter((u) => game.isGoneToGround(u)).map((u) => u.id),

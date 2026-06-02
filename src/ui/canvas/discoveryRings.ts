@@ -1,8 +1,9 @@
-import type { TerrainCatalog } from "../../core/map/terrainCatalog.js";
+import type { GameMap } from "../../core/map/GameMap.js";
+import { polygonTerrainCatalog } from "../../core/map/terrainCatalog.js";
 import { getRules, type Rules } from "../../core/rules.js";
 import type { PolygonTerrainType, Point, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
-import type { VisionCalculator } from "../../core/VisionCalculator.js";
+import { getStealthAtPosition } from "./effectiveStealth.js";
 
 /**
  * Pure ring-computation module for the Discovery Visualizer
@@ -61,16 +62,11 @@ export interface PostureOption {
 }
 
 /**
- * Posture dropdown options derived from the current rules + the
- * active ruleset's terrain catalog (for the polygon display names).
- * Groups every cover-providing source (polygons + dug-in + short
- * wall) by its modifier value so the dropdown auto-regroups when
- * rules change.
+ * Posture dropdown options derived from the current rules. Groups every
+ * cover-providing source (polygons + dug-in + short wall) by its modifier
+ * value so the dropdown auto-regroups when rules change.
  */
-export function availablePostureModifiers(
-  terrain: TerrainCatalog,
-  rules: Rules = getRules(),
-): PostureOption[] {
+export function availablePostureModifiers(rules: Rules = getRules()): PostureOption[] {
   const byMod = new Map<number, string[]>();
   const add = (mod: number, label: string) => {
     if (mod <= 1) return;
@@ -79,11 +75,7 @@ export function availablePostureModifiers(
     else byMod.set(mod, [label]);
   };
   for (const [kind, mod] of Object.entries(rules.polygonStealthModifier)) {
-    const entry = terrain.polygons[kind as PolygonTerrainType];
-    // Fall back to the raw type-string when the ruleset doesn't
-    // register an entry for this polygon kind — keeps the dropdown
-    // populated even with a partial terrain catalog.
-    add(mod, entry?.displayName ?? kind);
+    add(mod, polygonTerrainCatalog[kind as PolygonTerrainType].displayName);
   }
   add(rules.dugInStealthModifier, "Dug-in");
   add(rules.shortWallStealthModifier, "Short Wall");
@@ -102,8 +94,9 @@ export function availablePostureModifiers(
  */
 export function availableArchetypes(rules: Rules = getRules()): ResolvedArchetype[] {
   const out: ResolvedArchetype[] = [];
-  for (const [unitType, stats] of Object.entries(rules.unitTypeStats)) {
+  for (const unitType of Object.keys(rules.unitTypeStats) as UnitType[]) {
     for (const recon of [false, true]) {
+      const stats = rules.unitTypeStats[unitType];
       const visionMult = recon ? rules.modifierEffects.Recon.visionMultiplier : 1;
       const stealthMult = recon ? rules.modifierEffects.Recon.stealthMultiplier : 1;
       out.push({
@@ -153,33 +146,39 @@ export interface RingsForUnitOptions {
  * Incoming + outgoing rings for one own unit against the resolved lens.
  *
  * - Outgoing: `my.vision / threat.effective_stealth` — distance at which I detect the threat.
- *   The threat is a synthetic UI archetype, not a real Unit, so its
- *   effective stealth comes from `lens.threatEffectiveStealthMultiplier`
- *   computed UI-side in `resolveLens`.
  * - Incoming: `threat.vision / my.effective_stealth_at_position` — distance at which the threat detects me.
- *   `my.effective_stealth_at_position` now comes from the engine's R4
- *   read API (`vc.effectiveStealth`) — no UI-side composition. Closes
- *   B7 in code-health-pass-ui.md.
+ *   `my.effective_stealth_at_position` reads the unit's real concealment at `position`
+ *   (terrain + inherent dug-in, single-highest), times the unit's intrinsic stealth,
+ *   times GtG when concealed — matching the discover-calc semantics.
  *
- * Pass `options.treatAsJustMoved` during a move preview — the unit's
- * dug-in and GtG flags are simulated as cleared (Recon retains GtG)
- * by snapshotting + applying `onMoved()` + restoring around the engine
- * call. The mutate-then-restore is a known seam; revisited if/when
- * Unit gains a clone() method.
+ * Pass `options.treatAsJustMoved` during a move preview — the unit's dug-in
+ * and GtG flags are flipped off for the incoming calc (Recon retains GtG).
  */
 export function ringsForUnit(
   unit: Unit,
   position: Point,
-  vc: VisionCalculator,
+  map: GameMap,
   lens: ResolvedLens,
+  rules: Rules = getRules(),
   options: RingsForUnitOptions = {},
 ): Ring[] {
   const outgoingRadius = unit.getVision() / lens.threatEffectiveStealthMultiplier;
 
-  const incomingStealth = options.treatAsJustMoved
-    ? effectiveStealthAsIfMoved(vc, unit, position)
-    : vc.effectiveStealth(unit, position);
-  const incomingRadius = lens.archetype.vision / incomingStealth.value;
+  const myStealth = getStealthAtPosition(
+    unit,
+    position,
+    map,
+    options.treatAsJustMoved ? { skipInherent: true } : {},
+  );
+  const effectiveGtg = options.treatAsJustMoved
+    ? unit.hasModifier("Recon") && unit.goneToGround
+    : unit.goneToGround;
+  const myGtgStacks = effectiveGtg && myStealth.value > 1;
+  const myEffectiveStealth =
+    unit.getIntrinsicStealth() *
+    myStealth.value *
+    (myGtgStacks ? rules.goneToGroundStealthModifier : 1);
+  const incomingRadius = lens.archetype.vision / myEffectiveStealth;
 
   return [
     { radiusInches: incomingRadius, label: `${formatInches(incomingRadius)}″`, direction: "incoming" },
@@ -188,42 +187,14 @@ export function ringsForUnit(
 }
 
 /**
- * Compute the unit's effective stealth as if it had just been moved,
- * without permanently mutating the unit.
- *
- * The engine's `effectiveStealth(unit, …)` reads the unit's *current*
- * state. To answer "what would my stealth be right after a move?" we
- * need the post-`onMoved()` state. Snapshot first, apply onMoved,
- * read, then restore — leaves the unit unchanged at the call's edges.
- *
- * Single-threaded JS makes the brief mid-call mutation safe; React
- * never re-renders in the middle of this synchronous body.
- */
-function effectiveStealthAsIfMoved(
-  vc: VisionCalculator,
-  unit: Unit,
-  position: Point,
-) {
-  const snapshot = unit.captureMoveSnapshot();
-  unit.onMoved();
-  const result = vc.effectiveStealth(unit, position);
-  unit.applyMoveSnapshot(snapshot);
-  return result;
-}
-
-/**
  * Abstract-divisors mode: outgoing-only rings at every reachable stealth
  * multiplier given the current rules. Set of divisors is derived from the
  * available posture modifiers (raw + GtG-stacked when > 1) so it auto-tracks
  * rule changes.
  */
-export function abstractDivisorRings(
-  unit: Unit,
-  terrain: TerrainCatalog,
-  rules: Rules = getRules(),
-): Ring[] {
+export function abstractDivisorRings(unit: Unit, rules: Rules = getRules()): Ring[] {
   const divisors = new Set<number>([1]);
-  for (const opt of availablePostureModifiers(terrain, rules)) {
+  for (const opt of availablePostureModifiers(rules)) {
     divisors.add(opt.modifier);
     if (opt.modifier > 1) divisors.add(opt.modifier * rules.goneToGroundStealthModifier);
   }

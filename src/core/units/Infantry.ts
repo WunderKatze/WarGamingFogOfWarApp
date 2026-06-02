@@ -1,13 +1,9 @@
-import { getRules } from "../../../../core/rules.js";
-import { Unit, type ToggleableModifierSpec, type UnitInit } from "../../../../core/units/Unit.js";
+import { getRules } from "../rules.js";
+import { Unit, type UnitInit } from "./Unit.js";
 
 export interface InfantryInit extends UnitInit {
   dugIn?: boolean;
 }
-
-const INFANTRY_TOGGLEABLE_MODIFIERS: readonly ToggleableModifierSpec[] = [
-  { id: "dugIn", displayName: "Dug in" },
-];
 
 export class Infantry extends Unit {
   readonly type = "Infantry" as const;
@@ -25,23 +21,6 @@ export class Infantry extends Unit {
 
   setDugIn(value: boolean): void {
     this._dugIn = value;
-  }
-
-  override get toggleableModifiers(): readonly ToggleableModifierSpec[] {
-    return INFANTRY_TOGGLEABLE_MODIFIERS;
-  }
-
-  override getToggleableState(id: string): boolean {
-    if (id === "dugIn") return this._dugIn;
-    return super.getToggleableState(id);
-  }
-
-  override setToggleableState(id: string, value: boolean): void {
-    if (id === "dugIn") {
-      this._dugIn = value;
-      return;
-    }
-    super.setToggleableState(id, value);
   }
 
   override getInherentConcealmentModifier(): number {

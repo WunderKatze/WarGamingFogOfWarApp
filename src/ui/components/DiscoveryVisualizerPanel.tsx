@@ -38,14 +38,8 @@ export function DiscoveryVisualizerPanel() {
     phase === "Move" || phase === "FireDeclare" || phase === "AddRemoveUnits";
   const visible = isGameplayPhase && !isMapEditorOpen;
 
-  // Re-derive dropdown options whenever rules change. Terrain catalog
-  // comes from the active ruleset so the dropdown's polygon labels
-  // come from whichever ruleset registered them.
-  const terrain = game.ruleset.terrain;
-  const postureOptions = useMemo(
-    () => availablePostureModifiers(terrain, rules),
-    [terrain, rules],
-  );
+  // Re-derive dropdown options whenever rules change.
+  const postureOptions = useMemo(() => availablePostureModifiers(rules), [rules]);
   const archetypeOptions = useMemo(() => availableArchetypes(rules), [rules]);
 
   // Auto-reset posture if the selected modifier is no longer available

@@ -1,22 +1,12 @@
 import { GameMap } from "./map/GameMap.js";
-import type { Substrate } from "./map/substrate/index.js";
-import type { TerrainCatalog } from "./map/terrainCatalog.js";
+import { distance } from "./map/geometry.js";
+import { getRules } from "./rules.js";
 import { Unit } from "./units/Unit.js";
-import type { Point, TeamId, UnitId } from "./types.js";
-import type {
-  CompositionResult,
-  ContributorReading,
-  VisionConfig,
-} from "./vision/index.js";
+import type { TeamId, UnitId } from "./types.js";
 import type { VisionState } from "./VisionState.js";
 
 export class VisionCalculator {
-  constructor(
-    public readonly gameMap: GameMap,
-    public readonly visionConfig: VisionConfig,
-    public readonly substrate: Substrate,
-    public readonly terrain: TerrainCatalog,
-  ) {}
+  constructor(public readonly gameMap: GameMap) {}
 
   /**
    * Geometric line-of-sight check (the "See" relation in the requirements).
@@ -25,11 +15,7 @@ export class VisionCalculator {
    * are NOT considered.
    */
   see(observer: Unit, target: Unit): boolean {
-    return !this.gameMap.isRayBlocked(
-      observer.getPosition(),
-      target.getPosition(),
-      this.terrain,
-    );
+    return !this.gameMap.isRayBlocked(observer.getPosition(), target.getPosition());
   }
 
   /**
@@ -38,62 +24,36 @@ export class VisionCalculator {
    *   - see(observer, target) is true, AND
    *   - distance(observer, target) <= observer.vision / target.effective_stealth
    *
-   * Phase B 2b-ii: effective_stealth comes from the ruleset's vision
-   * pipeline — every registered contributor is run, the readings are
-   * flattened, and the ruleset's composition rule pools them. For WWII
-   * that's `intrinsic × pool(externals) × gtg-if-pooled`, matching the
-   * existing inline math exactly (see
-   * docs/features/v1/vision-rules-tweaks.md §2.3 for the WWII semantics
-   * and src/rulesets/wwii/engine/vision/composition.ts for the rule).
+   * effective_stealth = target.intrinsicStealth × highestMod × gtg?
+   * `highestMod` is the maximum of all per-ray terrain modifiers plus the
+   * target's own inherent concealment (dug-in); only the single highest
+   * applies. The target is **concealed** for this ray when `highestMod > 1`.
+   *
+   * **Gone to Ground** stacks multiplicatively on top when both:
+   *   - the target's `goneToGround` flag is true, AND
+   *   - the target is concealed for this ray (per the rule above).
+   * A GtG unit in the open with no inherent concealment gets no GtG stack;
+   * the same unit viewed across a short wall or through short terrain does.
+   * See docs/features/v1/vision-rules-tweaks.md §2.3.
    */
   discover(observer: Unit, target: Unit): boolean {
     if (!this.see(observer, target)) return false;
-    return this.substrate.distance(observer.getPosition(), target.getPosition())
-      <= this.detectionRange(observer, target);
-  }
 
-  /**
-   * Effective stealth at a position — the R4 public read API.
-   *
-   * Runs the ruleset's vision pipeline for one observation and
-   * returns the composed result: the pooled multiplier plus the
-   * per-source breakdown the UI can render directly ("intrinsic ×
-   * 4/3, Tall Woods × 3, GtG × 2") without re-deriving any of the
-   * math. Closes the B7 finding in code-health-pass-ui.md.
-   *
-   * Two modes:
-   *   - **With observer** (the discover path): contributors that
-   *     depend on the observer (e.g. WWII's terrain in ray-based
-   *     mode) get a real observer to reason from.
-   *   - **Without observer** (UI's "what's this unit's stealth at
-   *     this point?" calls): observer-dependent contributors fall
-   *     back to position-only behavior (WWII terrain returns
-   *     polygons-containing-the-point; walls drop out because they
-   *     have no meaning without a ray).
-   */
-  effectiveStealth(
-    target: Unit,
-    position: Point,
-    observer?: Unit,
-  ): CompositionResult {
-    const readings: ContributorReading[] = this.visionConfig.contributors.flatMap((c) =>
-      c.contribute(target, position, this.gameMap, observer),
-    );
-    return this.visionConfig.compositionRule(readings);
-  }
+    const observerPos = observer.getPosition();
+    const targetPos = target.getPosition();
 
-  /**
-   * Detection range — the R4 public read API for "from how far can
-   * this observer detect this target?" Computes the §4 threshold
-   * `observer.vision / target.effective_stealth` using the
-   * observer's view of the target at the target's current position.
-   * Callers asking about a hypothetical target position should use
-   * `effectiveStealth(target, hypotheticalPosition, observer)` and
-   * divide observer.getVision() themselves.
-   */
-  detectionRange(observer: Unit, target: Unit): number {
-    const effective = this.effectiveStealth(target, target.getPosition(), observer);
-    return observer.getVision() / effective.value;
+    const terrainMods = this.gameMap.getConcealmentModifiersAlongRay(observerPos, targetPos);
+    const inherentMod = target.getInherentConcealmentModifier();
+    let highestMod = Math.max(1, inherentMod, ...terrainMods);
+
+    if (target.goneToGround && highestMod > 1) {
+      highestMod *= getRules().goneToGroundStealthModifier;
+    }
+
+    const effectiveStealth = target.getIntrinsicStealth() * highestMod;
+    const visionRange = observer.getVision() / effectiveStealth;
+
+    return distance(observerPos, targetPos) <= visionRange;
   }
 
   /**

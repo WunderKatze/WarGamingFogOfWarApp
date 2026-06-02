@@ -1,10 +1,15 @@
 import ms from "milsymbol";
 import { useMemo, type CSSProperties } from "react";
 import type { Game } from "../../core/Game.js";
-import type { TerrainCatalog } from "../../core/map/terrainCatalog.js";
+import {
+  polygonTerrainCatalog,
+  wallTerrainCatalog,
+} from "../../core/map/terrainCatalog.js";
 import { getRules } from "../../core/rules.js";
 import type { Point, TeamId } from "../../core/types.js";
+import { Infantry } from "../../core/units/Infantry.js";
 import type { Unit } from "../../core/units/Unit.js";
+import { getStealthAtPosition } from "../canvas/effectiveStealth.js";
 import { buildSidc } from "../canvas/sidc.js";
 import { useGameContext } from "../hooks/useGameContext.js";
 import { useMapEditorContext } from "../hooks/useMapEditorContext.js";
@@ -76,7 +81,7 @@ export function InfoMenu() {
       />
     );
   } else if (cursorOnMap) {
-    body = <TerrainDisplay hit={hoveredTerrainHit} terrain={game.ruleset.terrain} />;
+    body = <TerrainDisplay hit={hoveredTerrainHit} />;
   } else {
     body = <p style={idleStyle}>Location is out of the map area</p>;
   }
@@ -103,24 +108,27 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
     ? revealed ? "Revealed" : "Not revealed"
     : revealed ? "Revealed" : "Detected";
 
-  // Engine read API (R4): the vision pipeline computes the value and
-  // the per-source breakdown; the UI just renders. No re-derivation
-  // of intrinsic × pool × gtg here — that's all engine-side.
-  const stealthResult = game.visionCalculator.effectiveStealth(unit, position);
-  const totalStealth = stealthResult.value;
-  // Build "×A intrinsic × ×B Tall Woods × ×C GtG" from the engine's
-  // breakdown. Each entry's label is whatever the contributing
-  // contributor declared.
-  const factors = stealthResult.breakdown.map(
-    (reading) => `×${formatMultiplier(reading.modifier)} ${reading.label}`,
-  );
-  // GtG informational row (the "Gone to Ground · ×N stealth if concealed
-  // by terrain" line below) shows whenever the unit is GtG, regardless
-  // of whether it's stacking right now. This is a player-affordance
-  // separate from the stealth math — kept reading getRules() directly
-  // for the displayed multiplier rather than going through the engine.
+  const positionStealth = getStealthAtPosition(unit, position, game.state.map);
+  // GtG only stacks during *concealed* discovery checks — see
+  // vision-rules-tweaks §2.3. At this position, "concealed" means the
+  // highest applicable stealth modifier (terrain + inherent) is >1. The
+  // unit can be gone-to-ground without that being true (e.g. a GtG tank
+  // in the open). Reflect that in the display: badge says "is GtG",
+  // stealth line only shows the stacked product when concealment makes
+  // it real.
+  const isConcealedHere = positionStealth.value > 1;
   const isGtg = game.isGoneToGround(unit);
+  const gtgApplies = isGtg && isConcealedHere;
   const gtgMultiplier = getRules().goneToGroundStealthModifier;
+  const intrinsicStealth = unit.getIntrinsicStealth();
+  const totalStealth = intrinsicStealth * positionStealth.value * (gtgApplies ? gtgMultiplier : 1);
+  // Build a compact "×A × ×B × ×C" breakdown of all contributing factors,
+  // omitting ×1 factors. Shown alongside the combined total when there's
+  // more than one contributing factor.
+  const factors: string[] = [];
+  if (intrinsicStealth !== 1) factors.push(`×${formatMultiplier(intrinsicStealth)} intrinsic`);
+  if (positionStealth.value !== 1) factors.push(`×${formatMultiplier(positionStealth.value)} ${positionStealth.source}`);
+  if (gtgApplies) factors.push(`×${formatMultiplier(gtgMultiplier)} GtG`);
   const pos = position;
 
   return (
@@ -155,20 +163,20 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
           </span>
         </div>
       )}
-      {unit.supportsToggleable("dugIn") && (
+      {unit instanceof Infantry && (
         <div style={detailRowStyle}>
           {isFriendly ? (
             <label style={checkboxLabelStyle}>
               <input
                 type="checkbox"
-                checked={unit.getToggleableState("dugIn")}
-                onChange={() => dispatch((g) => g.toggleToggleable(unit.id, "dugIn"))}
+                checked={unit.dugIn}
+                onChange={() => dispatch((g) => g.toggleDugIn(unit.id))}
               />
               Dug-In
             </label>
           ) : (
             <label style={{ ...checkboxLabelStyle, cursor: "default" }}>
-              <input type="checkbox" checked={unit.getToggleableState("dugIn")} disabled readOnly />
+              <input type="checkbox" checked={unit.dugIn} disabled readOnly />
               Dug-In
             </label>
           )}
@@ -180,12 +188,10 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
 
 /**
  * Terrain info — the cursor is over a polygon, a wall, or open ground.
- * All display fields come from the active ruleset's terrain catalog
- * (`game.ruleset.terrain`), so adding a new terrain kind to the
- * ruleset never needs to touch this component. Renders nothing-found
- * messaging when the terrain type isn't registered.
+ * All display fields come from `terrainCatalog`, so adding a new terrain
+ * kind never needs to touch this component.
  */
-function TerrainDisplay({ hit, terrain }: { hit: TerrainHit | undefined; terrain: TerrainCatalog }) {
+function TerrainDisplay({ hit }: { hit: TerrainHit | undefined }) {
   if (!hit) {
     return (
       <div style={unitDisplayStyle}>
@@ -199,22 +205,8 @@ function TerrainDisplay({ hit, terrain }: { hit: TerrainHit | undefined; terrain
     );
   }
   const entry = hit.kind === "polygon"
-    ? terrain.polygons[hit.polygon.terrainType]
-    : terrain.walls[hit.wall.wallType];
-  if (!entry) {
-    return (
-      <div style={unitDisplayStyle}>
-        <div style={headerRowStyle}>
-          <div style={{ flex: 1 }}>
-            <div style={nameStyle}>Unknown terrain</div>
-            <div style={subRowStyle}>
-              {hit.kind === "polygon" ? hit.polygon.terrainType : hit.wall.wallType}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    ? polygonTerrainCatalog[hit.polygon.terrainType]
+    : wallTerrainCatalog[hit.wall.wallType];
   return (
     <div style={unitDisplayStyle}>
       <div style={headerRowStyle}>

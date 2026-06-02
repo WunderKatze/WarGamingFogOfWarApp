@@ -40,26 +40,6 @@ export interface UnitMoveSnapshot {
   readonly subclassData: unknown;
 }
 
-/**
- * Declares a boolean state that the active player can flip on a unit
- * during their turn (e.g. WWII Infantry's `dugIn`). Different unit
- * types declare their own list — Tanks support none; Infantry
- * supports "dugIn". Engine-core code consults `unit.toggleableModifiers`
- * + `supportsToggleable(id)` instead of `instanceof`-checking concrete
- * subclasses, which is what lets engine-core stay ruleset-agnostic
- * (R3). Phase B step 4b.
- *
- * Read-only metadata: the spec describes the modifier; current value
- * + write live behind `getToggleableState` / `setToggleableState` so
- * subclasses own their own storage.
- */
-export interface ToggleableModifierSpec {
-  /** Stable id used by engine + UI to address this modifier. */
-  readonly id: string;
-  /** Human-readable label rendered next to the toggle. */
-  readonly displayName: string;
-}
-
 export abstract class Unit {
   abstract readonly type: UnitType;
 
@@ -101,50 +81,9 @@ export abstract class Unit {
     return this.modifiers.has(m);
   }
 
-  /**
-   * Toggleable boolean modifiers this unit type supports. Base default:
-   * none. Subclasses override to declare their own (e.g. Infantry
-   * declares "dugIn"). Engine-core's toggle pathway reads this list
-   * instead of `instanceof`-checking concrete subclasses, which keeps
-   * engine-core ruleset-agnostic. See [[ToggleableModifierSpec]].
-   */
-  get toggleableModifiers(): readonly ToggleableModifierSpec[] {
-    return [];
-  }
-
-  /** Convenience: does this unit declare the given toggleable id? */
-  supportsToggleable(id: string): boolean {
-    return this.toggleableModifiers.some((m) => m.id === id);
-  }
-
-  /**
-   * Read the current value of a toggleable modifier. Base default
-   * throws; subclasses that declare a toggleable override to return
-   * its current value. Callers should gate on `supportsToggleable(id)`
-   * before reading.
-   */
-  getToggleableState(id: string): boolean {
-    throw new Error(
-      `Unit "${this.id}" (type "${this.type}") does not support ` +
-        `toggleable modifier "${id}"`,
-    );
-  }
-
-  /**
-   * Write a toggleable modifier's value. Base default throws; subclasses
-   * that declare a toggleable override to apply the write. Callers should
-   * gate on `supportsToggleable(id)` before writing.
-   */
-  setToggleableState(id: string, _value: boolean): void {
-    throw new Error(
-      `Unit "${this.id}" (type "${this.type}") does not support ` +
-        `toggleable modifier "${id}"`,
-    );
-  }
-
   getVision(): number {
     const rules = getRules();
-    const base = this.getStats(rules).baseVision;
+    const base = rules.unitTypeStats[this.type].baseVision;
     const mult = this.hasModifier("Recon") ? rules.modifierEffects.Recon.visionMultiplier : 1;
     return base * mult;
   }
@@ -156,20 +95,9 @@ export abstract class Unit {
    */
   getIntrinsicStealth(): number {
     const rules = getRules();
-    const base = this.getStats(rules).baseStealth;
+    const base = rules.unitTypeStats[this.type].baseStealth;
     const mult = this.hasModifier("Recon") ? rules.modifierEffects.Recon.stealthMultiplier : 1;
     return base * mult;
-  }
-
-  private getStats(rules: ReturnType<typeof getRules>) {
-    const stats = rules.unitTypeStats[this.type];
-    if (!stats) {
-      throw new Error(
-        `Unit type "${this.type}" has no entry in rules.unitTypeStats — ` +
-          `the active ruleset must seed stats for every registered unit type.`,
-      );
-    }
-    return stats;
   }
 
   /**

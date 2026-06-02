@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { dugInStealthModifier, modifierEffects, unitTypeStats } from "../../../../../src/core/config.js";
-import { Infantry } from "../../../../../src/rulesets/wwii/engine/units/Infantry.js";
+import { dugInStealthModifier, modifierEffects, unitTypeStats } from "../../../src/core/config.js";
+import { Infantry } from "../../../src/core/units/Infantry.js";
 
 const at = (x: number, y: number) => ({ x, y });
 
 describe("Infantry", () => {
   it("uses Infantry base stats from config", () => {
     const u = new Infantry({ id: "1", name: "1st Pl", teamId: "A", position: at(0, 0) });
-    expect(u.getVision()).toBe(unitTypeStats.Infantry!.baseVision);
-    expect(u.getIntrinsicStealth()).toBe(unitTypeStats.Infantry!.baseStealth);
+    expect(u.getVision()).toBe(unitTypeStats.Infantry.baseVision);
+    expect(u.getIntrinsicStealth()).toBe(unitTypeStats.Infantry.baseStealth);
   });
 
   it("Recon scales vision by the configured Recon vision multiplier", () => {

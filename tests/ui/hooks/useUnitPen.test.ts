@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Infantry } from "../../../src/rulesets/wwii/engine/units/Infantry.js";
-import { Tank } from "../../../src/rulesets/wwii/engine/units/Tank.js";
+import { Infantry } from "../../../src/core/units/Infantry.js";
+import { Tank } from "../../../src/core/units/Tank.js";
 import { useUnitPen } from "../../../src/ui/hooks/useUnitPen.js";
 
 /**

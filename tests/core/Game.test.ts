@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { Game } from "../../src/core/Game.js";
 import { GameMap } from "../../src/core/map/GameMap.js";
-import { wwiiRuleset } from "../../src/rulesets/wwii/engine/index.js";
 import type { Point } from "../../src/core/types.js";
-import { Infantry } from "../../src/rulesets/wwii/engine/units/Infantry.js";
-import { Tank } from "../../src/rulesets/wwii/engine/units/Tank.js";
+import { Infantry } from "../../src/core/units/Infantry.js";
+import { Tank } from "../../src/core/units/Tank.js";
 
 const p = (x: number, y: number): Point => ({ x, y });
 
@@ -12,7 +11,6 @@ const makeGame = (mapWidth = 200, mapHeight = 200) =>
   new Game({
     map: new GameMap({ width: mapWidth, height: mapHeight }),
     players: ["A", "B"],
-    ruleset: wwiiRuleset,
   });
 
 describe("Game — constructor", () => {
@@ -26,7 +24,7 @@ describe("Game — constructor", () => {
 
   it("rejects fewer than 2 players", () => {
     expect(
-      () => new Game({ map: new GameMap({ width: 100, height: 100 }), players: ["solo"], ruleset: wwiiRuleset }),
+      () => new Game({ map: new GameMap({ width: 100, height: 100 }), players: ["solo"] }),
     ).toThrow(/at least 2 players/);
   });
 });
@@ -269,7 +267,7 @@ describe("Game — Move phase", () => {
     expect(g.state.visionState.revealed.has("u1")).toBe(false);
   });
 
-  it('toggleToggleable("dugIn") flips Infantry dugIn', () => {
+  it("toggleDugIn flips Infantry dugIn", () => {
     const g = makeGame();
     const inf = g.deployUnit({ type: "Infantry", name: "I", position: p(0, 0) });
     g.endDeployment();
@@ -280,22 +278,13 @@ describe("Game — Move phase", () => {
     g.startTurn();
     g.endAddRemoveUnits();
     expect((inf as Infantry).dugIn).toBe(true);
-    g.toggleToggleable(inf.id, "dugIn");
+    g.toggleDugIn(inf.id);
     expect((inf as Infantry).dugIn).toBe(false);
   });
 
-  it('toggleToggleable("dugIn") throws for Tanks (Tank does not support dugIn)', () => {
+  it("toggleDugIn throws for Tanks", () => {
     const g = setupAtMove();
-    expect(() => g.toggleToggleable("u1", "dugIn")).toThrow(
-      /does not support toggleable modifier "dugIn"/,
-    );
-  });
-
-  it("toggleToggleable throws for any unknown modifier id", () => {
-    const g = setupAtMove();
-    expect(() => g.toggleToggleable("u1", "nonexistent")).toThrow(
-      /does not support toggleable modifier "nonexistent"/,
-    );
+    expect(() => g.toggleDugIn("u1")).toThrow(/not Infantry/);
   });
 
   it("moveUnit clears dug-in on Infantry", () => {

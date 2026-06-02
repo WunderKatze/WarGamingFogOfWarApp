@@ -83,7 +83,7 @@ export abstract class Unit {
 
   getVision(): number {
     const rules = getRules();
-    const base = rules.unitTypeStats[this.type].baseVision;
+    const base = this.getStats(rules).baseVision;
     const mult = this.hasModifier("Recon") ? rules.modifierEffects.Recon.visionMultiplier : 1;
     return base * mult;
   }
@@ -95,9 +95,20 @@ export abstract class Unit {
    */
   getIntrinsicStealth(): number {
     const rules = getRules();
-    const base = rules.unitTypeStats[this.type].baseStealth;
+    const base = this.getStats(rules).baseStealth;
     const mult = this.hasModifier("Recon") ? rules.modifierEffects.Recon.stealthMultiplier : 1;
     return base * mult;
+  }
+
+  private getStats(rules: ReturnType<typeof getRules>) {
+    const stats = rules.unitTypeStats[this.type];
+    if (!stats) {
+      throw new Error(
+        `Unit type "${this.type}" has no entry in rules.unitTypeStats — ` +
+          `the active ruleset must seed stats for every registered unit type.`,
+      );
+    }
+    return stats;
   }
 
   /**

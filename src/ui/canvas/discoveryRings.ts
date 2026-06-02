@@ -102,9 +102,8 @@ export function availablePostureModifiers(
  */
 export function availableArchetypes(rules: Rules = getRules()): ResolvedArchetype[] {
   const out: ResolvedArchetype[] = [];
-  for (const unitType of Object.keys(rules.unitTypeStats) as UnitType[]) {
+  for (const [unitType, stats] of Object.entries(rules.unitTypeStats)) {
     for (const recon of [false, true]) {
-      const stats = rules.unitTypeStats[unitType];
       const visionMult = recon ? rules.modifierEffects.Recon.visionMultiplier : 1;
       const stealthMult = recon ? rules.modifierEffects.Recon.stealthMultiplier : 1;
       out.push({

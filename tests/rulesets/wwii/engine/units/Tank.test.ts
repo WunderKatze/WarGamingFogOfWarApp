@@ -7,8 +7,8 @@ const at = (x: number, y: number) => ({ x, y });
 describe("Tank", () => {
   it("uses Tank base stats from config", () => {
     const t = new Tank({ id: "1", name: "M4", teamId: "A", position: at(0, 0) });
-    expect(t.getVision()).toBe(unitTypeStats.Tank.baseVision);
-    expect(t.getIntrinsicStealth()).toBe(unitTypeStats.Tank.baseStealth);
+    expect(t.getVision()).toBe(unitTypeStats.Tank!.baseVision);
+    expect(t.getIntrinsicStealth()).toBe(unitTypeStats.Tank!.baseStealth);
   });
 
   it("Recon scales Tank stats by the configured Recon multipliers", () => {

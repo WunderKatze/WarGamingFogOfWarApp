@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { GameFlow } from "../../../src/core/gameflow/index.js";
 import type { Substrate } from "../../../src/core/map/substrate/index.js";
+import type { UnitTypeEntry } from "../../../src/core/units/UnitTypeEntry.js";
 import { singleHighest, type VisionConfig } from "../../../src/core/vision/index.js";
 import {
   clearRulesets,
@@ -9,6 +10,7 @@ import {
   registerRuleset,
   type Ruleset,
 } from "../../../src/core/ruleset/index.js";
+import { Tank } from "../../../src/rulesets/wwii/engine/units/Tank.js";
 
 /**
  * Tests for the Ruleset registry (src/core/ruleset/registry.ts).
@@ -39,6 +41,14 @@ const minimalSubstrate: Substrate = {
 
 const minimalTerrain = { polygons: {}, walls: {} };
 
+const minimalUnitTypes: Record<string, UnitTypeEntry> = {
+  Tank: {
+    id: "Tank",
+    displayName: "Tank",
+    construct: (p) => new Tank(p),
+  },
+};
+
 const sampleA: Ruleset = {
   id: "alpha",
   displayName: "Alpha",
@@ -46,6 +56,7 @@ const sampleA: Ruleset = {
   vision: minimalVision,
   substrate: minimalSubstrate,
   terrain: minimalTerrain,
+  unitTypes: minimalUnitTypes,
 };
 const sampleB: Ruleset = {
   id: "beta",
@@ -54,6 +65,7 @@ const sampleB: Ruleset = {
   vision: minimalVision,
   substrate: minimalSubstrate,
   terrain: minimalTerrain,
+  unitTypes: minimalUnitTypes,
 };
 
 afterEach(() => {
@@ -94,6 +106,7 @@ describe("ruleset registry", () => {
       vision: minimalVision,
       substrate: minimalSubstrate,
       terrain: minimalTerrain,
+      unitTypes: minimalUnitTypes,
     };
     expect(() => registerRuleset(conflicting)).toThrow(
       /Ruleset already registered with id "alpha"/,
@@ -131,8 +144,25 @@ describe("ruleset registry", () => {
       vision: minimalVision,
       substrate: minimalSubstrate,
       terrain: minimalTerrain,
+      unitTypes: minimalUnitTypes,
     };
     expect(() => registerRuleset(broken)).toThrow(/initialPhaseId "missing"/);
     expect(getRuleset("broken")).toBeUndefined();
+  });
+
+  it("rejects a ruleset that registers no unit types", () => {
+    // Phase B 4a: a ruleset with no unit types can't build anything,
+    // so the registry treats it as malformed and fails fast at boot.
+    const empty: Ruleset = {
+      id: "empty",
+      displayName: "Empty",
+      gameflow: minimalFlow,
+      vision: minimalVision,
+      substrate: minimalSubstrate,
+      terrain: minimalTerrain,
+      unitTypes: {},
+    };
+    expect(() => registerRuleset(empty)).toThrow(/no unit types/);
+    expect(getRuleset("empty")).toBeUndefined();
   });
 });

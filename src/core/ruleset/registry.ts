@@ -41,6 +41,11 @@ export function registerRuleset(ruleset: Ruleset): void {
   // ruleset fails at app boot rather than in mid-game when an action
   // tries to consult the bad definition.
   validateGameFlow(ruleset.gameflow);
+  if (Object.keys(ruleset.unitTypes).length === 0) {
+    throw new Error(
+      `Ruleset "${ruleset.id}" registers no unit types — at least one is required.`,
+    );
+  }
   rulesets.set(ruleset.id, ruleset);
 }
 

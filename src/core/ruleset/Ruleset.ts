@@ -1,6 +1,7 @@
 import type { GameFlow } from "../gameflow/index.js";
 import type { Substrate } from "../map/substrate/index.js";
 import type { TerrainCatalog } from "../map/terrainCatalog.js";
+import type { UnitTypeEntry } from "../units/UnitTypeEntry.js";
 import type { VisionConfig } from "../vision/index.js";
 
 /**
@@ -18,7 +19,8 @@ import type { VisionConfig } from "../vision/index.js";
  *   - 1a — id + displayName
  *   - 1c — gameflow (Axis 1)
  *   - 1d — vision (Axis 2: contributors + composition rule)
- *   - 1e — substrate (Axis 3: distance seam, this commit)
+ *   - 1e — substrate (Axis 3: distance seam)
+ *   - 4a — unitTypes (data-driven unit model, this commit)
  *
  * See docs/features/v2/mechanics-refactor.md §13.1 for the target shape.
  */
@@ -61,4 +63,12 @@ export interface Ruleset {
    * subset of terrain kinds; unknown lookups return undefined.
    */
   readonly terrain: TerrainCatalog;
+  /**
+   * The ruleset's unit type catalog — entries keyed by the string id
+   * that `CreateUnitParams.type` carries. Game.buildUnit consults this
+   * to instantiate units without importing any ruleset's concrete Unit
+   * subclasses (closes the engine-core R3 violation that Phase B step
+   * 4a tracks). Must be non-empty; validated at registration time.
+   */
+  readonly unitTypes: Record<string, UnitTypeEntry>;
 }

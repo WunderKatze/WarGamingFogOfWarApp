@@ -2,11 +2,12 @@ import { GameState, type GamePhase, type GameStateInit } from "./GameState.js";
 import type { Ruleset } from "./ruleset/index.js";
 import type { Modifier, Point, TeamId, UnitId, UnitSize, UnitType } from "./types.js";
 // R3 violation (engine-core importing from rulesets/) — transitional.
-// Game.ts's buildUnit factory and toggleDugIn instanceof check still
-// hardcode the WWII unit subclasses; Phase B step 4 (data-driven unit
-// model) lifts these imports. See mechanics-refactor.md §13.1.
+// Phase B step 4a lifted buildUnit's WWII-subclass switch into a
+// ruleset.unitTypes registry lookup. The residual `Infantry` import
+// here serves toggleDugIn's `instanceof Infantry` check only;
+// step 4b's toggleable-modifier abstraction lifts that too. See
+// mechanics-refactor.md §13.1.
 import { Infantry } from "../rulesets/wwii/engine/units/Infantry.js";
-import { Tank } from "../rulesets/wwii/engine/units/Tank.js";
 import { Unit } from "./units/Unit.js";
 import { VisionCalculator } from "./VisionCalculator.js";
 
@@ -421,21 +422,23 @@ export class Game {
     defaultDugIn: boolean,
     defaultGoneToGround: boolean,
   ): Unit {
-    const id = this.generateUnitId();
-    const teamId = this.state.getActivePlayer();
-    const common = {
-      id,
-      teamId,
+    const entry = this.ruleset.unitTypes[params.type];
+    if (!entry) {
+      throw new Error(
+        `Game.buildUnit: ruleset "${this.ruleset.id}" registers no unit ` +
+          `type "${params.type}"`,
+      );
+    }
+    return entry.construct({
+      id: this.generateUnitId(),
+      teamId: this.state.getActivePlayer(),
       name: params.name,
       position: params.position,
       goneToGround: defaultGoneToGround,
       ...(params.size !== undefined && { size: params.size }),
       ...(params.modifiers !== undefined && { modifiers: params.modifiers }),
-    };
-    if (params.type === "Tank") {
-      return new Tank(common);
-    }
-    return new Infantry({ ...common, dugIn: params.dugIn ?? defaultDugIn });
+      dugIn: params.dugIn ?? defaultDugIn,
+    });
   }
 
   private generateUnitId(): UnitId {

@@ -168,10 +168,12 @@ export function RulesEditor() {
   };
 
   const setUnitStat = (type: UnitType, field: "baseVision" | "baseStealth", value: number) => {
+    const existing = rules.unitTypeStats[type];
+    if (!existing) return;
     setRules({
       unitTypeStats: {
         ...rules.unitTypeStats,
-        [type]: { ...rules.unitTypeStats[type], [field]: value },
+        [type]: { ...existing, [field]: value },
       },
     });
   };
@@ -273,17 +275,22 @@ export function RulesEditor() {
         )}
       </Section>
 
+      {/* WWII-specific sections — the editor still hardcodes which unit
+          types appear. Iterating `rules.unitTypeStats` would lift this,
+          but that's its own R3 cleanup separate from Phase B step 4a.
+          The `!` reflects the WWII ruleset's guarantee that these keys
+          exist; under a non-WWII ruleset this editor wouldn't render. */}
       <Section title="Unit type — Infantry">
         <NumberField
           label="Base vision"
           suffix={'"'}
-          value={rules.unitTypeStats.Infantry.baseVision}
+          value={rules.unitTypeStats.Infantry!.baseVision}
           onChange={(v) => setUnitStat("Infantry", "baseVision", v)}
         />
         <NumberField
           label="Base stealth"
           suffix="×"
-          value={rules.unitTypeStats.Infantry.baseStealth}
+          value={rules.unitTypeStats.Infantry!.baseStealth}
           onChange={(v) => setUnitStat("Infantry", "baseStealth", v)}
         />
       </Section>
@@ -292,13 +299,13 @@ export function RulesEditor() {
         <NumberField
           label="Base vision"
           suffix={'"'}
-          value={rules.unitTypeStats.Tank.baseVision}
+          value={rules.unitTypeStats.Tank!.baseVision}
           onChange={(v) => setUnitStat("Tank", "baseVision", v)}
         />
         <NumberField
           label="Base stealth"
           suffix="×"
-          value={rules.unitTypeStats.Tank.baseStealth}
+          value={rules.unitTypeStats.Tank!.baseStealth}
           onChange={(v) => setUnitStat("Tank", "baseStealth", v)}
         />
       </Section>

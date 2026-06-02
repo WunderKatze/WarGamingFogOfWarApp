@@ -94,20 +94,20 @@ describe("VisionCalculator.discover", () => {
   it("a tank exactly at vision range can be discovered (≤, inclusive)", () => {
     const vc = makeVC(new GameMap({ width: 1000, height: 100 }));
     const observer = tankAt("o", p(0, 0));
-    const target = tankAt("t", p(unitTypeStats.Tank.baseVision, 0));
+    const target = tankAt("t", p(unitTypeStats.Tank!.baseVision, 0));
     expect(vc.discover(observer, target)).toBe(true);
   });
 
   it("a tank just beyond vision range cannot be discovered", () => {
     const vc = makeVC(new GameMap({ width: 1000, height: 100 }));
     const observer = tankAt("o", p(0, 0));
-    const target = tankAt("t", p(unitTypeStats.Tank.baseVision + 0.01, 0));
+    const target = tankAt("t", p(unitTypeStats.Tank!.baseVision + 0.01, 0));
     expect(vc.discover(observer, target)).toBe(false);
   });
 
   it("Recon extends the observer's effective vision range by its multiplier", () => {
     const vc = makeVC(new GameMap({ width: 1000, height: 100 }));
-    const baseRange = unitTypeStats.Tank.baseVision; // tank vs tank → effective_stealth = 1
+    const baseRange = unitTypeStats.Tank!.baseVision; // tank vs tank → effective_stealth = 1
     const observer = reconTankAt("o", p(0, 0));
     // Just inside the extended range
     const inside = tankAt("ti", p(baseRange * modifierEffects.Recon.visionMultiplier - 0.01, 0));
@@ -120,8 +120,8 @@ describe("VisionCalculator.discover", () => {
   it("an infantry target has shorter discovery range than a tank (higher base stealth)", () => {
     const vc = makeVC(new GameMap({ width: 1000, height: 100 }));
     const observer = tankAt("o", p(0, 0));
-    const baseRange = unitTypeStats.Tank.baseVision;
-    const infantryRange = baseRange / unitTypeStats.Infantry.baseStealth;
+    const baseRange = unitTypeStats.Tank!.baseVision;
+    const infantryRange = baseRange / unitTypeStats.Infantry!.baseStealth;
     // Infantry at the threshold of the reduced range can be discovered
     const inf = infantryAt("inf", p(infantryRange, 0));
     expect(vc.discover(observer, inf)).toBe(true);
@@ -133,9 +133,9 @@ describe("VisionCalculator.discover", () => {
   it("a dug-in infantry target has further reduced discovery range (its inherent concealment applies)", () => {
     const vc = makeVC(new GameMap({ width: 1000, height: 100 }));
     const observer = tankAt("o", p(0, 0));
-    const baseRange = unitTypeStats.Tank.baseVision;
+    const baseRange = unitTypeStats.Tank!.baseVision;
     // Dug-in infantry: effective_stealth = baseStealth × dugInModifier
-    const dugInRange = baseRange / (unitTypeStats.Infantry.baseStealth * dugInStealthModifier);
+    const dugInRange = baseRange / (unitTypeStats.Infantry!.baseStealth * dugInStealthModifier);
     const dug = infantryAt("dug", p(dugInRange, 0), true);
     expect(vc.discover(observer, dug)).toBe(true);
     const farDug = infantryAt("farDug", p(dugInRange + 0.01, 0), true);
@@ -155,7 +155,7 @@ describe("VisionCalculator.discover", () => {
     const thinWoods = square("w", 4, 0, stripWidth, 100, "TallWoods");
     const vc = makeVC(new GameMap({ width: 1000, height: 100, polygons: [thinWoods] }));
     const observer = tankAt("o", p(0, 50));
-    const baseRange = unitTypeStats.Tank.baseVision;
+    const baseRange = unitTypeStats.Tank!.baseVision;
     // Effective stealth = tank base (1) × tallWoods modifier → range / mult
     const reducedRange = baseRange / polygonStealthModifier.TallWoods;
     const target = tankAt("t", p(reducedRange, 50));
@@ -170,9 +170,9 @@ describe("VisionCalculator.discover", () => {
     const building = square("b", 5, 0, 20, 100, "Building");
     const vc = makeVC(new GameMap({ width: 1000, height: 100, polygons: [building] }));
     const observer = tankAt("o", p(0, 50));
-    const baseRange = unitTypeStats.Tank.baseVision;
+    const baseRange = unitTypeStats.Tank!.baseVision;
     const expectedHighest = Math.max(dugInStealthModifier, polygonStealthModifier.Building);
-    const expectedRange = baseRange / (unitTypeStats.Infantry.baseStealth * expectedHighest);
+    const expectedRange = baseRange / (unitTypeStats.Infantry!.baseStealth * expectedHighest);
     const dugInside = infantryAt("dugIn", p(expectedRange, 50), true);
     expect(building.containsPoint(dugInside.getPosition())).toBe(true);
     expect(vc.discover(observer, dugInside)).toBe(true);
@@ -187,7 +187,7 @@ describe("VisionCalculator.discover", () => {
     const building = square("b", 5, 0, 25, 100, "Building");
     const vc = makeVC(new GameMap({ width: 1000, height: 100, polygons: [building] }));
     const observer = tankAt("o", p(0, 50));
-    const baseRange = unitTypeStats.Tank.baseVision;
+    const baseRange = unitTypeStats.Tank!.baseVision;
     const reducedRange = baseRange / polygonStealthModifier.Building;
     const target = tankAt("t", p(reducedRange, 50));
     expect(building.containsPoint(target.getPosition())).toBe(true);
@@ -237,7 +237,7 @@ describe("VisionCalculator.runVisionPhase — first turn (empty state)", () => {
     // Recon's only asymmetry against a regular Tank is the vision multiplier
     // (stealth multiplier = 1). Pick a distance strictly between the regular
     // tank's vision range and the recon tank's extended range.
-    const tankRange = unitTypeStats.Tank.baseVision;
+    const tankRange = unitTypeStats.Tank!.baseVision;
     const reconRange = tankRange * modifierEffects.Recon.visionMultiplier;
     const distance = (tankRange + reconRange) / 2;
     const a = reconTankAt("A1", p(0, 0), "A");
@@ -353,7 +353,7 @@ describe("VisionCalculator.runVisionPhase — step 9 cascade (fire → See addit
     //   2. team B's team list expands with A1
     //   3. step 5 sees A1 on B1's team list → uses See instead of Discover → adds A1
     //   4. step 8 sees mutual (A1↔B1 in each other's individual lists) → both revealed
-    const tankRange = unitTypeStats.Tank.baseVision;
+    const tankRange = unitTypeStats.Tank!.baseVision;
     const reconRange = tankRange * modifierEffects.Recon.visionMultiplier;
     const distance = (tankRange + reconRange) / 2;
     const a = reconTankAt("A1", p(0, 0), "A");
@@ -392,7 +392,7 @@ describe("VisionCalculator — Gone to Ground", () => {
   // range against a tank observer in a Short Terrain strip — guarantees
   // "detected without GtG, not detected with GtG" regardless of config
   // tweaks. Short Terrain never blocks sight, so we rely on discover.
-  const tankRange = unitTypeStats.Tank.baseVision;
+  const tankRange = unitTypeStats.Tank!.baseVision;
   const stStealth = polygonStealthModifier.ShortTerrain;
   const noGtgRange = tankRange / stStealth;
   const gtgRange = tankRange / (stStealth * goneToGroundStealthModifier);
@@ -429,7 +429,7 @@ describe("VisionCalculator — Gone to Ground", () => {
     // so GtG must not stack. Pick a distance well inside vision range.
     const vc = makeVC(new GameMap({ width: 1000, height: 100 }));
     const observer = tankAt("A1", p(0, 50), "A");
-    const target = tankAt("B1", p(unitTypeStats.Tank.baseVision / 2, 50), "B");
+    const target = tankAt("B1", p(unitTypeStats.Tank!.baseVision / 2, 50), "B");
     target.goneToGround = true;
 
     const state = createEmptyVisionState();
@@ -441,8 +441,8 @@ describe("VisionCalculator — Gone to Ground", () => {
     // Open map, dug-in Infantry target observed by a Tank. Inherent
     // concealment > 1, so the discover ray is "concealed" → GtG should
     // stack. Pick a distance strictly between the GtG and no-GtG ranges.
-    const tankVision = unitTypeStats.Tank.baseVision;
-    const infStealth = unitTypeStats.Infantry.baseStealth;
+    const tankVision = unitTypeStats.Tank!.baseVision;
+    const infStealth = unitTypeStats.Infantry!.baseStealth;
     const baseNoGtg = tankVision / (infStealth * dugInStealthModifier);
     const baseGtg = tankVision / (infStealth * dugInStealthModifier * goneToGroundStealthModifier);
     const targetX = (baseNoGtg + baseGtg) / 2;

@@ -1,7 +1,23 @@
-import type { Ruleset } from "../../../core/ruleset/index.js";
+import type { Ruleset, UnitTypeEntry } from "../../../core/ruleset/index.js";
+import { Tank } from "../../wwii/engine/units/Tank.js";
 import { testGameFlow } from "./gameflow.js";
 import { manhattanGrid } from "./substrate.js";
 import { testVisionConfig } from "./vision.js";
+
+/**
+ * Test ruleset's unit type registry. Borrows WWII's Tank class for the
+ * same reason integration tests do (see §13.1 / the Step 3 doc) — the
+ * abstractions are what's under test, not a parallel unit catalog.
+ * Re-uses the "Tank" id so the integration test fixtures that say
+ * `deployUnit({ type: "Tank", ... })` work against either ruleset.
+ */
+const testUnitTypes: Record<string, UnitTypeEntry> = {
+  Tank: {
+    id: "Tank",
+    displayName: "Tank (test)",
+    construct: (p) => new Tank(p),
+  },
+};
 
 /**
  * The test ruleset — exists to prove Phase B's abstractions are
@@ -34,4 +50,5 @@ export const testRuleset: Ruleset = {
   // are needed. A future test ruleset that exercises terrain rules
   // would register its own catalog.
   terrain: { polygons: {}, walls: {} },
+  unitTypes: testUnitTypes,
 };

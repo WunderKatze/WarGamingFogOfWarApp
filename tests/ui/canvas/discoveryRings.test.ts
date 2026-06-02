@@ -82,7 +82,7 @@ describe("availableArchetypes", () => {
       (a) => a.unitType === "Tank" && a.recon,
     )!;
     expect(reconTank.vision).toBeCloseTo(
-      unitTypeStats.Tank.baseVision * modifierEffects.Recon.visionMultiplier,
+      unitTypeStats.Tank!.baseVision * modifierEffects.Recon.visionMultiplier,
       10,
     );
   });
@@ -91,8 +91,8 @@ describe("availableArchetypes", () => {
     const plainTank = availableArchetypes().find(
       (a) => a.unitType === "Tank" && !a.recon,
     )!;
-    expect(plainTank.vision).toBe(unitTypeStats.Tank.baseVision);
-    expect(plainTank.intrinsicStealth).toBe(unitTypeStats.Tank.baseStealth);
+    expect(plainTank.vision).toBe(unitTypeStats.Tank!.baseVision);
+    expect(plainTank.intrinsicStealth).toBe(unitTypeStats.Tank!.baseStealth);
   });
 });
 
@@ -135,8 +135,8 @@ describe("ringsForUnit", () => {
     const rings = ringsForUnit(dugIn, p(0, 0), makeVC(), lens);
     const incoming = rings.find((r) => r.direction === "incoming")!;
     expect(incoming.radiusInches).toBeCloseTo(
-      unitTypeStats.Tank.baseVision /
-        (unitTypeStats.Infantry.baseStealth * dugInStealthModifier),
+      unitTypeStats.Tank!.baseVision /
+        (unitTypeStats.Infantry!.baseStealth * dugInStealthModifier),
       10,
     );
   });
@@ -170,7 +170,7 @@ describe("ringsForUnit", () => {
     const incoming = ringsForUnit(obs, p(0, 0), makeVC(map), lens)
       .find((r) => r.direction === "incoming")!;
     expect(incoming.radiusInches).toBeCloseTo(
-      unitTypeStats.Tank.baseVision /
+      unitTypeStats.Tank!.baseVision /
         (1 * polygonStealthModifier.ShortTerrain * goneToGroundStealthModifier),
       10,
     );
@@ -193,7 +193,7 @@ describe("ringsForUnit", () => {
     const incoming = previewRings.find((r) => r.direction === "incoming")!;
     // No dug-in → effective stealth is just Infantry intrinsic.
     expect(incoming.radiusInches).toBeCloseTo(
-      unitTypeStats.Tank.baseVision / unitTypeStats.Infantry.baseStealth,
+      unitTypeStats.Tank!.baseVision / unitTypeStats.Infantry!.baseStealth,
       10,
     );
   });
@@ -214,7 +214,7 @@ describe("ringsForUnit", () => {
     ).find((r) => r.direction === "incoming")!;
     // GtG dropped on preview → stealth = Tank intrinsic × ShortTerrain (no GtG stack)
     expect(previewIncoming.radiusInches).toBeCloseTo(
-      unitTypeStats.Tank.baseVision / (1 * polygonStealthModifier.ShortTerrain),
+      unitTypeStats.Tank!.baseVision / (1 * polygonStealthModifier.ShortTerrain),
       10,
     );
   });
@@ -235,7 +235,7 @@ describe("ringsForUnit", () => {
     ).find((r) => r.direction === "incoming")!;
     // Recon keeps GtG → stealth = intrinsic × ShortTerrain × GtG
     expect(previewIncoming.radiusInches).toBeCloseTo(
-      unitTypeStats.Tank.baseVision /
+      unitTypeStats.Tank!.baseVision /
         (1 * polygonStealthModifier.ShortTerrain * goneToGroundStealthModifier),
       10,
     );

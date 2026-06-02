@@ -37,12 +37,15 @@ const minimalSubstrate: Substrate = {
   distance: () => 0,
 };
 
+const minimalTerrain = { polygons: {}, walls: {} };
+
 const sampleA: Ruleset = {
   id: "alpha",
   displayName: "Alpha",
   gameflow: minimalFlow,
   vision: minimalVision,
   substrate: minimalSubstrate,
+  terrain: minimalTerrain,
 };
 const sampleB: Ruleset = {
   id: "beta",
@@ -50,6 +53,7 @@ const sampleB: Ruleset = {
   gameflow: minimalFlow,
   vision: minimalVision,
   substrate: minimalSubstrate,
+  terrain: minimalTerrain,
 };
 
 afterEach(() => {
@@ -89,6 +93,7 @@ describe("ruleset registry", () => {
       gameflow: minimalFlow,
       vision: minimalVision,
       substrate: minimalSubstrate,
+      terrain: minimalTerrain,
     };
     expect(() => registerRuleset(conflicting)).toThrow(
       /Ruleset already registered with id "alpha"/,
@@ -125,6 +130,7 @@ describe("ruleset registry", () => {
       },
       vision: minimalVision,
       substrate: minimalSubstrate,
+      terrain: minimalTerrain,
     };
     expect(() => registerRuleset(broken)).toThrow(/initialPhaseId "missing"/);
     expect(getRuleset("broken")).toBeUndefined();

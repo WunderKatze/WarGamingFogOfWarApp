@@ -30,4 +30,8 @@ export const testRuleset: Ruleset = {
   gameflow: testGameFlow,
   vision: testVisionConfig,
   substrate: manhattanGrid,
+  // Empty terrain — integration tests use empty maps, so no entries
+  // are needed. A future test ruleset that exercises terrain rules
+  // would register its own catalog.
+  terrain: { polygons: {}, walls: {} },
 };

@@ -95,7 +95,7 @@ describe("test ruleset — Axis 1 (gameflow)", () => {
 
 describe("test ruleset — Axis 2 (vision pipeline)", () => {
   it("VisionCalculator wired with the test ruleset uses sumComposition", () => {
-    const vc = new VisionCalculator(makeMap(), testRuleset.vision, testRuleset.substrate);
+    const vc = new VisionCalculator(makeMap(), testRuleset.vision, testRuleset.substrate, testRuleset.terrain);
     // Tank intrinsic stealth = 1. Test contributors emit:
     //   - testIntrinsicContributor: modifier 1 (Tank's intrinsic)
     //   - testConstantContributor:  modifier 2.5
@@ -107,7 +107,7 @@ describe("test ruleset — Axis 2 (vision pipeline)", () => {
   });
 
   it("the breakdown includes every contributor reading (sum uses every reading)", () => {
-    const vc = new VisionCalculator(makeMap(), testRuleset.vision, testRuleset.substrate);
+    const vc = new VisionCalculator(makeMap(), testRuleset.vision, testRuleset.substrate, testRuleset.terrain);
     const result = vc.effectiveStealth(
       tankAt("t", p(0, 0)),
       p(0, 0),
@@ -126,8 +126,9 @@ describe("test ruleset — Axis 2 (vision pipeline)", () => {
     // pipeline.
     const { wwiiVisionConfig } = await import("../../../../src/rulesets/wwii/engine/vision.js");
     const { freePositionInches } = await import("../../../../src/rulesets/wwii/engine/substrate.js");
-    const wwiiVc = new VisionCalculator(makeMap(), wwiiVisionConfig, freePositionInches);
-    const testVc = new VisionCalculator(makeMap(), testRuleset.vision, testRuleset.substrate);
+    const { wwiiTerrainCatalog } = await import("../../../../src/rulesets/wwii/engine/terrain.js");
+    const wwiiVc = new VisionCalculator(makeMap(), wwiiVisionConfig, freePositionInches, wwiiTerrainCatalog);
+    const testVc = new VisionCalculator(makeMap(), testRuleset.vision, testRuleset.substrate, testRuleset.terrain);
     const target = tankAt("t", p(5, 0));
     const wwiiResult = wwiiVc.effectiveStealth(target, target.getPosition(), tankAt("o", p(0, 0)));
     const testResult = testVc.effectiveStealth(target, target.getPosition(), tankAt("o", p(0, 0)));
@@ -153,7 +154,7 @@ describe("test ruleset — Axis 3 (substrate)", () => {
     // For a target at (10, 0):
     //   - Manhattan distance = 10
     //   - 10 < 18.286 → detected
-    const vc = new VisionCalculator(makeMap(), testRuleset.vision, testRuleset.substrate);
+    const vc = new VisionCalculator(makeMap(), testRuleset.vision, testRuleset.substrate, testRuleset.terrain);
     const observer = tankAt("o", p(0, 0));
     expect(vc.discover(observer, tankAt("t1", p(10, 0)))).toBe(true);
     expect(vc.discover(observer, tankAt("t2", p(20, 0)))).toBe(false);

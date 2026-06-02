@@ -47,6 +47,7 @@ export class Game {
       init.map,
       init.ruleset.vision,
       init.ruleset.substrate,
+      init.ruleset.terrain,
     );
   }
 

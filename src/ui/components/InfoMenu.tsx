@@ -1,10 +1,7 @@
 import ms from "milsymbol";
 import { useMemo, type CSSProperties } from "react";
 import type { Game } from "../../core/Game.js";
-import {
-  polygonTerrainCatalog,
-  wallTerrainCatalog,
-} from "../../core/map/terrainCatalog.js";
+import type { TerrainCatalog } from "../../core/map/terrainCatalog.js";
 import { getRules } from "../../core/rules.js";
 import type { Point, TeamId } from "../../core/types.js";
 // R3 violation (UI-core importing from rulesets/) — transitional B3
@@ -83,7 +80,7 @@ export function InfoMenu() {
       />
     );
   } else if (cursorOnMap) {
-    body = <TerrainDisplay hit={hoveredTerrainHit} />;
+    body = <TerrainDisplay hit={hoveredTerrainHit} terrain={game.ruleset.terrain} />;
   } else {
     body = <p style={idleStyle}>Location is out of the map area</p>;
   }
@@ -187,10 +184,12 @@ function UnitDisplay({ unit, position, isLocked, perspectiveTeamId, game, dispat
 
 /**
  * Terrain info — the cursor is over a polygon, a wall, or open ground.
- * All display fields come from `terrainCatalog`, so adding a new terrain
- * kind never needs to touch this component.
+ * All display fields come from the active ruleset's terrain catalog
+ * (`game.ruleset.terrain`), so adding a new terrain kind to the
+ * ruleset never needs to touch this component. Renders nothing-found
+ * messaging when the terrain type isn't registered.
  */
-function TerrainDisplay({ hit }: { hit: TerrainHit | undefined }) {
+function TerrainDisplay({ hit, terrain }: { hit: TerrainHit | undefined; terrain: TerrainCatalog }) {
   if (!hit) {
     return (
       <div style={unitDisplayStyle}>
@@ -204,8 +203,22 @@ function TerrainDisplay({ hit }: { hit: TerrainHit | undefined }) {
     );
   }
   const entry = hit.kind === "polygon"
-    ? polygonTerrainCatalog[hit.polygon.terrainType]
-    : wallTerrainCatalog[hit.wall.wallType];
+    ? terrain.polygons[hit.polygon.terrainType]
+    : terrain.walls[hit.wall.wallType];
+  if (!entry) {
+    return (
+      <div style={unitDisplayStyle}>
+        <div style={headerRowStyle}>
+          <div style={{ flex: 1 }}>
+            <div style={nameStyle}>Unknown terrain</div>
+            <div style={subRowStyle}>
+              {hit.kind === "polygon" ? hit.polygon.terrainType : hit.wall.wallType}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={unitDisplayStyle}>
       <div style={headerRowStyle}>

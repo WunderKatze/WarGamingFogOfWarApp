@@ -1,4 +1,4 @@
-import { polygonTerrainCatalog } from "../../core/map/terrainCatalog.js";
+import type { TerrainCatalog } from "../../core/map/terrainCatalog.js";
 import { getRules, type Rules } from "../../core/rules.js";
 import type { PolygonTerrainType, Point, UnitType } from "../../core/types.js";
 import type { Unit } from "../../core/units/Unit.js";
@@ -61,11 +61,16 @@ export interface PostureOption {
 }
 
 /**
- * Posture dropdown options derived from the current rules. Groups every
- * cover-providing source (polygons + dug-in + short wall) by its modifier
- * value so the dropdown auto-regroups when rules change.
+ * Posture dropdown options derived from the current rules + the
+ * active ruleset's terrain catalog (for the polygon display names).
+ * Groups every cover-providing source (polygons + dug-in + short
+ * wall) by its modifier value so the dropdown auto-regroups when
+ * rules change.
  */
-export function availablePostureModifiers(rules: Rules = getRules()): PostureOption[] {
+export function availablePostureModifiers(
+  terrain: TerrainCatalog,
+  rules: Rules = getRules(),
+): PostureOption[] {
   const byMod = new Map<number, string[]>();
   const add = (mod: number, label: string) => {
     if (mod <= 1) return;
@@ -74,7 +79,11 @@ export function availablePostureModifiers(rules: Rules = getRules()): PostureOpt
     else byMod.set(mod, [label]);
   };
   for (const [kind, mod] of Object.entries(rules.polygonStealthModifier)) {
-    add(mod, polygonTerrainCatalog[kind as PolygonTerrainType].displayName);
+    const entry = terrain.polygons[kind as PolygonTerrainType];
+    // Fall back to the raw type-string when the ruleset doesn't
+    // register an entry for this polygon kind — keeps the dropdown
+    // populated even with a partial terrain catalog.
+    add(mod, entry?.displayName ?? kind);
   }
   add(rules.dugInStealthModifier, "Dug-in");
   add(rules.shortWallStealthModifier, "Short Wall");
@@ -209,9 +218,13 @@ function effectiveStealthAsIfMoved(
  * available posture modifiers (raw + GtG-stacked when > 1) so it auto-tracks
  * rule changes.
  */
-export function abstractDivisorRings(unit: Unit, rules: Rules = getRules()): Ring[] {
+export function abstractDivisorRings(
+  unit: Unit,
+  terrain: TerrainCatalog,
+  rules: Rules = getRules(),
+): Ring[] {
   const divisors = new Set<number>([1]);
-  for (const opt of availablePostureModifiers(rules)) {
+  for (const opt of availablePostureModifiers(terrain, rules)) {
     divisors.add(opt.modifier);
     if (opt.modifier > 1) divisors.add(opt.modifier * rules.goneToGroundStealthModifier);
   }

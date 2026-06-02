@@ -12,6 +12,7 @@ import { Infantry } from "../../../src/rulesets/wwii/engine/units/Infantry.js";
 import { Tank } from "../../../src/rulesets/wwii/engine/units/Tank.js";
 import { VisionCalculator } from "../../../src/core/VisionCalculator.js";
 import { freePositionInches } from "../../../src/rulesets/wwii/engine/substrate.js";
+import { wwiiTerrainCatalog } from "../../../src/rulesets/wwii/engine/terrain.js";
 import { wwiiVisionConfig } from "../../../src/rulesets/wwii/engine/vision.js";
 import {
   abstractDivisorRings,
@@ -33,16 +34,16 @@ const emptyMap = () => new GameMap({ width: 1000, height: 1000 });
  * of map + rules. This helper keeps test fixtures concise.
  */
 const makeVC = (map: GameMap = emptyMap()) =>
-  new VisionCalculator(map, wwiiVisionConfig, freePositionInches);
+  new VisionCalculator(map, wwiiVisionConfig, freePositionInches, wwiiTerrainCatalog);
 
 describe("availablePostureModifiers", () => {
   it("always includes Open (×1) as the first entry", () => {
-    const opts = availablePostureModifiers();
+    const opts = availablePostureModifiers(wwiiTerrainCatalog);
     expect(opts[0]).toMatchObject({ modifier: 1, label: "Open", sources: [] });
   });
 
   it("includes one entry per distinct cover modifier value > 1", () => {
-    const opts = availablePostureModifiers();
+    const opts = availablePostureModifiers(wwiiTerrainCatalog);
     const mods = opts.map((o) => o.modifier);
     // No duplicates
     expect(new Set(mods).size).toBe(mods.length);
@@ -57,7 +58,7 @@ describe("availablePostureModifiers", () => {
   });
 
   it("groups sources by modifier value (×2 collects Short Terrain, Dug-in, Short Wall)", () => {
-    const opts = availablePostureModifiers();
+    const opts = availablePostureModifiers(wwiiTerrainCatalog);
     const mod2 = opts.find((o) => o.modifier === 2);
     expect(mod2).toBeDefined();
     expect(mod2!.sources).toContain("Dug-in");
@@ -243,12 +244,12 @@ describe("ringsForUnit", () => {
 
 describe("abstractDivisorRings", () => {
   it("returns outgoing-only rings", () => {
-    const rings = abstractDivisorRings(tankAt("o"));
+    const rings = abstractDivisorRings(tankAt("o"), wwiiTerrainCatalog);
     expect(rings.every((r) => r.direction === "outgoing")).toBe(true);
   });
 
   it("includes every reachable divisor (posture mods + GtG stacks)", () => {
-    const rings = abstractDivisorRings(tankAt("o"));
+    const rings = abstractDivisorRings(tankAt("o"), wwiiTerrainCatalog);
     const divisors = rings.map((r) => r.divisor!);
     // With current rules: postures yield {1, 2, 3}; GtG stacks → adds {4, 6}
     expect(divisors).toEqual([1, 2, 3, 4, 6]);
@@ -256,7 +257,7 @@ describe("abstractDivisorRings", () => {
 
   it("each ring's radius is observer.vision / divisor", () => {
     const obs = tankAt("o");
-    for (const r of abstractDivisorRings(obs)) {
+    for (const r of abstractDivisorRings(obs, wwiiTerrainCatalog)) {
       expect(r.radiusInches).toBeCloseTo(obs.getVision() / r.divisor!, 10);
     }
   });

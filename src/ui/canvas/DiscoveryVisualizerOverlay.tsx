@@ -94,7 +94,7 @@ export function DiscoveryVisualizerOverlay({ perspectiveTeamId }: Props) {
         const isPreviewing = previewPositionOverride?.unitId === unit.id;
         const position = isPreviewing ? previewPositionOverride.position : unit.getPosition();
         const rings = lens === null
-          ? abstractDivisorRings(unit, rules)
+          ? abstractDivisorRings(unit, game.ruleset.terrain, rules)
           : ringsForUnit(unit, position, game.visionCalculator, lens, { treatAsJustMoved: isPreviewing });
         return (
           <UnitRingGroup

@@ -1,5 +1,6 @@
 import { GameMap } from "./map/GameMap.js";
 import type { Substrate } from "./map/substrate/index.js";
+import type { TerrainCatalog } from "./map/terrainCatalog.js";
 import { Unit } from "./units/Unit.js";
 import type { Point, TeamId, UnitId } from "./types.js";
 import type {
@@ -14,6 +15,7 @@ export class VisionCalculator {
     public readonly gameMap: GameMap,
     public readonly visionConfig: VisionConfig,
     public readonly substrate: Substrate,
+    public readonly terrain: TerrainCatalog,
   ) {}
 
   /**
@@ -23,7 +25,11 @@ export class VisionCalculator {
    * are NOT considered.
    */
   see(observer: Unit, target: Unit): boolean {
-    return !this.gameMap.isRayBlocked(observer.getPosition(), target.getPosition());
+    return !this.gameMap.isRayBlocked(
+      observer.getPosition(),
+      target.getPosition(),
+      this.terrain,
+    );
   }
 
   /**

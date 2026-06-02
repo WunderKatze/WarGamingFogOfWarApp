@@ -1,6 +1,7 @@
 import type { Ruleset } from "../../../core/ruleset/index.js";
 import { wwiiGameFlow } from "./gameflow.js";
 import { freePositionInches } from "./substrate.js";
+import { wwiiTerrainCatalog } from "./terrain.js";
 import { wwiiVisionConfig } from "./vision.js";
 
 /**
@@ -28,4 +29,5 @@ export const wwiiRuleset: Ruleset = {
   gameflow: wwiiGameFlow,
   vision: wwiiVisionConfig,
   substrate: freePositionInches,
+  terrain: wwiiTerrainCatalog,
 };

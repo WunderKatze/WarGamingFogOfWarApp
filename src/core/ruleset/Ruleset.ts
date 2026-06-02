@@ -1,5 +1,6 @@
 import type { GameFlow } from "../gameflow/index.js";
 import type { Substrate } from "../map/substrate/index.js";
+import type { TerrainCatalog } from "../map/terrainCatalog.js";
 import type { VisionConfig } from "../vision/index.js";
 
 /**
@@ -52,4 +53,12 @@ export interface Ruleset {
    * work (see Substrate doc and §11 D5).
    */
   readonly substrate: Substrate;
+  /**
+   * The ruleset's terrain catalog — polygon and wall entries keyed by
+   * type. Engine consults this through `ruleset.terrain` lookups
+   * instead of importing a specific ruleset's catalog file directly,
+   * which keeps engine-core ruleset-agnostic (R3). May register a
+   * subset of terrain kinds; unknown lookups return undefined.
+   */
+  readonly terrain: TerrainCatalog;
 }

@@ -1,11 +1,13 @@
-import {
-  polygonTerrainCatalog,
-  wallTerrainCatalog,
-} from "../../../../../core/map/terrainCatalog.js";
 import type {
   Contributor,
   ContributorReading,
 } from "../../../../../core/vision/index.js";
+import { wwiiTerrainCatalog } from "../../terrain.js";
+
+// Local destructure for readability — the contributor lives inside the
+// WWII bundle so importing the WWII catalog directly is fine (no R3
+// violation: rulesets may import from their own folder).
+const { polygons: polygonTerrainCatalog, walls: wallTerrainCatalog } = wwiiTerrainCatalog;
 
 /**
  * WWII's terrain contributor: emits a reading per applicable polygon
@@ -41,7 +43,7 @@ export const terrainContributor: Contributor = {
       const observerPos = observer.getPosition();
       for (const wall of map.walls) {
         const entry = wallTerrainCatalog[wall.wallType];
-        if (entry.appliesAsConcealment(wall, observerPos, position)) {
+        if (entry && entry.appliesAsConcealment(wall, observerPos, position)) {
           readings.push({
             contributorId: "terrain",
             modifier: entry.stealthMultiplier,
@@ -51,7 +53,7 @@ export const terrainContributor: Contributor = {
       }
       for (const poly of map.polygons) {
         const entry = polygonTerrainCatalog[poly.terrainType];
-        if (entry.appliesAsConcealment(poly, observerPos, position)) {
+        if (entry && entry.appliesAsConcealment(poly, observerPos, position)) {
           readings.push({
             contributorId: "terrain",
             modifier: entry.stealthMultiplier,
@@ -67,11 +69,13 @@ export const terrainContributor: Contributor = {
     for (const poly of map.polygons) {
       if (poly.containsPoint(position)) {
         const entry = polygonTerrainCatalog[poly.terrainType];
-        readings.push({
-          contributorId: "terrain",
-          modifier: entry.stealthMultiplier,
-          label: entry.displayName,
-        });
+        if (entry) {
+          readings.push({
+            contributorId: "terrain",
+            modifier: entry.stealthMultiplier,
+            label: entry.displayName,
+          });
+        }
       }
     }
     return readings;

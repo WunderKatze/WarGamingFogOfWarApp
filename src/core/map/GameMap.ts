@@ -1,7 +1,4 @@
-import {
-  polygonTerrainCatalog,
-  wallTerrainCatalog,
-} from "./terrainCatalog.js";
+import type { TerrainCatalog } from "./terrainCatalog.js";
 import type { TerrainPolygon } from "./TerrainPolygon.js";
 import type { TerrainWall } from "./TerrainWall.js";
 import type { Point } from "../types.js";
@@ -42,40 +39,25 @@ export class GameMap {
   }
 
   /**
-   * True if any terrain blocks the ray from `from` to `to`. Per-kind rules
-   * (Tall walls, Buildings with ≥ 2 edge intersections, Tall Woods with > N″
-   * inside) live in the terrain catalog — see `terrainCatalog.ts`.
+   * True if any terrain blocks the ray from `from` to `to`. Per-kind
+   * rules (Tall walls, Buildings with ≥ 2 edge intersections, Tall
+   * Woods with > N″ inside) come from the supplied terrain catalog;
+   * an unknown polygon/wall type (no entry in the catalog) doesn't
+   * block.
+   *
+   * Phase B 2d follow-up: catalog is now a parameter rather than an
+   * import, so GameMap stays ruleset-agnostic (R3). Callers supply
+   * the active ruleset's `terrain` slot.
    */
-  isRayBlocked(from: Point, to: Point): boolean {
+  isRayBlocked(from: Point, to: Point, terrain: TerrainCatalog): boolean {
     for (const wall of this.walls) {
-      if (wallTerrainCatalog[wall.wallType].blocksRay(wall, from, to)) return true;
+      const entry = terrain.walls[wall.wallType];
+      if (entry?.blocksRay(wall, from, to)) return true;
     }
     for (const poly of this.polygons) {
-      if (polygonTerrainCatalog[poly.terrainType].blocksRay(poly, from, to)) return true;
+      const entry = terrain.polygons[poly.terrainType];
+      if (entry?.blocksRay(poly, from, to)) return true;
     }
     return false;
-  }
-
-  /**
-   * Stealth modifiers from terrain that apply to a target along a ray.
-   * Caller pools these with the target unit's getInherentConcealmentModifier()
-   * and takes the single highest — modifiers do not stack. Per-kind rules
-   * live in the terrain catalog.
-   */
-  getConcealmentModifiersAlongRay(from: Point, targetPosition: Point): number[] {
-    const mods: number[] = [];
-    for (const wall of this.walls) {
-      const entry = wallTerrainCatalog[wall.wallType];
-      if (entry.appliesAsConcealment(wall, from, targetPosition)) {
-        mods.push(entry.stealthMultiplier);
-      }
-    }
-    for (const poly of this.polygons) {
-      const entry = polygonTerrainCatalog[poly.terrainType];
-      if (entry.appliesAsConcealment(poly, from, targetPosition)) {
-        mods.push(entry.stealthMultiplier);
-      }
-    }
-    return mods;
   }
 }

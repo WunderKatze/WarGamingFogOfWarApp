@@ -94,12 +94,14 @@ describe("WorkingMap — round-trips", () => {
     expect(restored.height).toBe(original.height);
     expect(restored.polygons.length).toBe(original.polygons.length);
     expect(restored.walls.length).toBe(original.walls.length);
-    // sanity: stealth math still works the same on the round-tripped map
-    expect(
-      restored.getConcealmentModifiersAlongRay({ x: 15, y: 15 }, { x: 15, y: 15 }),
-    ).toEqual(
-      original.getConcealmentModifiersAlongRay({ x: 15, y: 15 }, { x: 15, y: 15 }),
-    );
+    // Round-tripped polygons/walls have the same terrainType / wallType
+    // as originals — sufficient sanity check that the catalog will treat
+    // them identically. The terrain-stealth math itself is covered by
+    // tests/rulesets/wwii/engine/vision/contributors.test.ts.
+    expect(restored.polygons.map((p) => p.terrainType))
+      .toEqual(original.polygons.map((p) => p.terrainType));
+    expect(restored.walls.map((w) => w.wallType))
+      .toEqual(original.walls.map((w) => w.wallType));
   });
 });
 

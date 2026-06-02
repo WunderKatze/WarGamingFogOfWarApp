@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Circle, Group, Line, Rect, Text } from "react-konva";
-import { polygonTerrainCatalog, wallTerrainCatalog } from "../../core/map/terrainCatalog.js";
 import {
   fromGameMap,
   parseWorkingMap,
@@ -501,9 +500,10 @@ interface PolygonDraftOverlayProps {
  * the previewed shape reads as the same kind it will commit to.
  */
 function PolygonDraftOverlay({ vertices, cursor, terrainType }: PolygonDraftOverlayProps) {
+  const { game } = useGameContext();
   if (vertices.length === 0) return null;
   const px = theme.pixelsPerInch;
-  const stroke = polygonTerrainCatalog[terrainType].visual.stroke;
+  const stroke = game.ruleset.terrain.polygons[terrainType]?.visual.stroke ?? "#888";
   const points = vertices.flatMap((v) => [v.x * px, v.y * px]);
   const lastVertex = vertices[vertices.length - 1]!;
   return (
@@ -555,6 +555,7 @@ function PolygonDraftOverlay({ vertices, cursor, terrainType }: PolygonDraftOver
  * wall: thicker red line overlay covering the original.
  */
 function DeleteHighlight({ hit }: { hit: TerrainHit }) {
+  const { game } = useGameContext();
   const px = theme.pixelsPerInch;
   const stroke = "#e63946";
   if (hit.kind === "polygon") {
@@ -570,7 +571,7 @@ function DeleteHighlight({ hit }: { hit: TerrainHit }) {
       />
     );
   }
-  const baseWidth = wallTerrainCatalog[hit.wall.wallType].visual.strokeWidth;
+  const baseWidth = game.ruleset.terrain.walls[hit.wall.wallType]?.visual.strokeWidth ?? 3;
   return (
     <Line
       points={[
@@ -600,8 +601,11 @@ interface WallDraftOverlayProps {
  * what will commit. Distance label sits at the midpoint.
  */
 function WallDraftOverlay({ from, cursor, wallType }: WallDraftOverlayProps) {
+  const { game } = useGameContext();
   const px = theme.pixelsPerInch;
-  const { stroke, strokeWidth } = wallTerrainCatalog[wallType].visual;
+  const wallEntry = game.ruleset.terrain.walls[wallType];
+  if (!wallEntry) return null;
+  const { stroke, strokeWidth } = wallEntry.visual;
   return (
     <Group listening={false}>
       <Circle x={from.x * px} y={from.y * px} radius={3} fill={stroke} />

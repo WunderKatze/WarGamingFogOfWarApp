@@ -5,6 +5,7 @@ import { Infantry } from "../../src/rulesets/wwii/engine/units/Infantry.js";
 import { Tank } from "../../src/rulesets/wwii/engine/units/Tank.js";
 import { VisionCalculator } from "../../src/core/VisionCalculator.js";
 import { freePositionInches } from "../../src/rulesets/wwii/engine/substrate.js";
+import { wwiiTerrainCatalog } from "../../src/rulesets/wwii/engine/terrain.js";
 import { wwiiVisionConfig } from "../../src/rulesets/wwii/engine/vision.js";
 
 /**
@@ -55,7 +56,7 @@ const woodsMap = (): GameMap =>
   });
 
 const makeVC = (map = emptyMap()) =>
-  new VisionCalculator(map, wwiiVisionConfig, freePositionInches);
+  new VisionCalculator(map, wwiiVisionConfig, freePositionInches, wwiiTerrainCatalog);
 
 describe("VisionCalculator.effectiveStealth — with observer (ray-based)", () => {
   it("returns value 1 + empty breakdown for a Tank in the open with no observer concerns", () => {
